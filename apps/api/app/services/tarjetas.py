@@ -118,3 +118,20 @@ def mayor_liberacion(planes: list[PlanCuotas], desde: str, meses: int = 6) -> tu
             terminan = sum(1 for pl in planes if pl.moneda == Moneda.ARS and ultimo_periodo(pl) == prev.periodo)
             mejor = (act.periodo, baja, terminan)
     return mejor
+
+
+def cuotas_futuras(db: Session, cuenta: Cuenta, hoy: date | None = None) -> Decimal:
+    """Lo que debés en cuotas de resúmenes posteriores al que está abierto (no sale ahora)."""
+    abierto = proximo_periodo(cuenta, hoy)
+    total = CERO
+    for pl in db.scalars(select(PlanCuotas).where(PlanCuotas.cuenta_id == cuenta.id, PlanCuotas.moneda == cuenta.moneda)):
+        ya = max(0, min(pl.cuotas_total, distancia(pl.primer_periodo, abierto) + 1))
+        total += pl.monto_cuota * (pl.cuotas_total - ya)
+    return total
+
+
+def deuda_corriente(db: Session, cuenta: Cuenta, saldo: Decimal, hoy: date | None = None) -> tuple[Decimal, Decimal]:
+    """(lo que vence ahora, cuotas futuras). La deuda total de la tarjeta es la suma."""
+    deuda = max(-saldo, CERO)
+    futuras = min(deuda, cuotas_futuras(db, cuenta, hoy))
+    return deuda - futuras, futuras

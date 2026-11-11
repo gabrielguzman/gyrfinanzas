@@ -23,6 +23,7 @@ function Disponible({ inicio }: { inicio: Inicio }) {
   const disponible = Number(ars?.disponible ?? 0);
   const enCuentas = Number(ars?.en_cuentas ?? 0);
   const deuda = Number(ars?.deuda_tarjetas ?? 0);
+  const futuras = Number(ars?.cuotas_futuras ?? 0);
   const animado = useContador(disponible);
   const pctLibre = enCuentas > 0 ? Math.max(0, Math.min(100, ((enCuentas - deuda) / enCuentas) * 100)) : 0;
 
@@ -36,7 +37,7 @@ function Disponible({ inicio }: { inicio: Inicio }) {
         {monto(animado === disponible ? disponible : Math.round(animado))}
       </p>
       <p className="mt-2 max-w-[34ch] text-[13px] text-slab-muted">
-        Lo que tenés en cuentas menos lo que ya debés en tarjetas.
+        Lo que tenés en cuentas menos lo que vence en tus tarjetas.
       </p>
       <div className="mt-6 flex h-2.5 gap-[3px] overflow-hidden rounded-full bg-white/10">
         {(enCuentas > 0 || deuda > 0) && (
@@ -52,10 +53,15 @@ function Disponible({ inicio }: { inicio: Inicio }) {
           <dd className="num mt-0.5 text-base font-bold">{monto(enCuentas)}</dd>
         </div>
         <div>
-          <dt className="flex items-center gap-1.5 text-slab-muted"><i className="h-2 w-2 rounded-full bg-[#ffab73]" />Debés en tarjetas</dt>
+          <dt className="flex items-center gap-1.5 text-slab-muted"><i className="h-2 w-2 rounded-full bg-[#ffab73]" />A pagar en tarjetas</dt>
           <dd className="num mt-0.5 text-base font-bold">{monto(deuda)}</dd>
         </div>
       </dl>
+      {futuras > 0 && (
+        <p className="mt-3 text-[13px] text-slab-muted">
+          Además, <b className="num text-slab-ink">{monto(futuras)}</b> en cuotas de los próximos resúmenes.
+        </p>
+      )}
       {usd && Number(usd.disponible) !== 0 && (
         <p className="mt-4 border-t border-white/10 pt-3 text-[13px] text-slab-muted">
           Además tenés <b className="num text-slab-ink">{monto(usd.disponible, "USD")}</b>

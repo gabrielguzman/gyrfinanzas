@@ -220,7 +220,7 @@ def test_saldo(entorno):
     bot.procesar(msg(YO, "nafta 40k visa"))
     bot.procesar(msg(YO, "/saldo"))
     t = cli.ultimo[1]
-    assert "Disponible: $ 60.000" in t and "debés $ 40.000" in t
+    assert "Disponible: $ 60.000" in t and "a pagar $ 40.000" in t
 
 
 def test_grupos_ignorados(entorno):

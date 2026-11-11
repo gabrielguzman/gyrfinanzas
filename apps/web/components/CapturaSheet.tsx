@@ -210,7 +210,7 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="text-xs font-semibold text-muted">
                 {vista.deuda_tipo === "me_deben" ? `Se suma a lo que te debe ${vista.deuda_nombre}` : vista.deuda_tipo === "debo" ? `Se anota en lo que le debés a ${vista.deuda_nombre}` : TIPO[vista.tipo]}
-                {vista.cuotas ? ` en ${vista.cuotas} cuotas` : ""}
+                {vista.cuotas ? ` en ${vista.cuotas} cuotas${vista.monto ? ` de ${monto(Math.round(Number(vista.monto) / vista.cuotas))}` : ""}` : ""}
                 {vista.garantia_meses ? ` · garantía ${duracion(vista.garantia_meses)}` : ""}
               </span>
               <span className="truncate text-lg font-extrabold">{vista.descripcion}</span>
@@ -226,6 +226,12 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
               {vista.monto ? monto(vista.monto, vista.moneda, ingreso ? "+" : "-") : "¿monto?"}
             </span>
           </div>
+        )}
+
+        {vista?.cuotas && vista.cuotas > 1 && !/cuotas?\s+(fijas\s+)?de\s/i.test(texto) && (
+          <p className="-mt-2 text-xs text-faint">
+            ¿Tiene interés? Escribí el valor de la cuota («{vista.cuotas} cuotas de 110k») y anoto lo que vas a pagar de verdad.
+          </p>
         )}
 
         {vista && verCategorias && (

@@ -39,6 +39,7 @@ from app.services.registro import interpretar_texto
 from app.services import cotizacion as svc_cot, metas as svc_metas, patrimonio as svc_patrimonio
 from app.services.registro import SinMonto, borrar as borrar_mov, confirmar, crear_desde_texto, vincular
 from app.services.saldos import saldos_por_cuenta
+from app.services.tarjetas import deuda_corriente
 from app.services import semanal
 
 log = logging.getLogger("gyr.bot")
@@ -405,12 +406,16 @@ class Bot:
             if not de_moneda:
                 continue
             plata = sum((saldos.get(c.id, Decimal(0)) for c in de_moneda if c.tipo != TipoCuenta.tarjeta_credito), Decimal(0))
-            deuda = sum((max(-saldos.get(c.id, Decimal(0)), Decimal(0)) for c in de_moneda if c.tipo == TipoCuenta.tarjeta_credito), Decimal(0))
+            tarjetas = {c.id: deuda_corriente(db, c, saldos.get(c.id, Decimal(0)))
+                        for c in de_moneda if c.tipo == TipoCuenta.tarjeta_credito}
+            deuda = sum((a for a, _ in tarjetas.values()), Decimal(0))
             lineas.append(f"<b>Disponible{' en USD' if moneda == 'USD' else ''}: {pesos(plata - deuda, moneda)}</b>")
             for c in de_moneda:
                 s = saldos.get(c.id, Decimal(0))
                 if c.tipo == TipoCuenta.tarjeta_credito:
-                    lineas.append(f"  💳 {esc(c.nombre)}: debés {pesos(max(-s, Decimal(0)), moneda)}")
+                    ahora, futuras = tarjetas[c.id]
+                    extra = f" (+ {pesos(futuras, moneda)} en cuotas que vienen)" if futuras > 0 else ""
+                    lineas.append(f"  💳 {esc(c.nombre)}: a pagar {pesos(ahora, moneda)}{extra}")
                 else:
                     lineas.append(f"  • {esc(c.nombre)}: {pesos(s, moneda)}")
             lineas.append("")

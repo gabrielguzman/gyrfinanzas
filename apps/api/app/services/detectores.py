@@ -42,15 +42,15 @@ def _pesos(v: Decimal) -> str:
     return f"$ {entero}"
 
 
-def gastos(db: Session, desde: date, hasta: date) -> list[Movimiento]:
-    """Gastos confirmados en pesos, sin préstamos entre personas."""
+def gastos(db: Session, desde: date, hasta: date, incluir_cuotas: bool = False) -> list[Movimiento]:
+    """Gastos confirmados en pesos, sin préstamos entre personas ni compras en cuotas (van por cuota)."""
     return [m for m in db.scalars(
         select(Movimiento)
         .options(selectinload(Movimiento.categoria), selectinload(Movimiento.garantias), selectinload(Movimiento.cuenta))
         .where(Movimiento.estado == EstadoMovimiento.confirmado, Movimiento.tipo == TipoMovimiento.gasto,
                Movimiento.moneda == Moneda.ARS, Movimiento.fecha.between(desde, hasta))
         .order_by(Movimiento.fecha, Movimiento.creado)
-    ) if not (m.deuda_id and m.descripcion.startswith("Préstamo a"))]
+    ) if not (m.deuda_id and m.descripcion.startswith("Préstamo a")) and (incluir_cuotas or not (m.cuotas and m.cuotas > 1))]
 
 
 # ───────────────────────── recurrentes ─────────────────────────
@@ -323,7 +323,7 @@ def hallazgos(db: Session, hoy: date | None = None, incluir_descartados: bool = 
     ult30 = gastos(db, hoy - timedelta(days=30), hoy)
     rec = recurrentes(db, hoy)
     todos = (_duplicados(ult30) + _garantias(db, hoy) + _aumentos(rec) + _plata_tirada(ult30, hoy)
-             + _hormiga(ult30, hoy) + _desvios(db, hoy) + _sin_garantia(ult30) + _fijos(rec)
+             + _hormiga(ult30, hoy) + _desvios(db, hoy) + _sin_garantia(gastos(db, hoy - timedelta(days=30), hoy, incluir_cuotas=True)) + _fijos(rec)
              + _metas(db, hoy) + _inversiones(db, hoy))
     if not incluir_descartados:
         descartados = set(db.scalars(select(HallazgoDescartado.clave)))

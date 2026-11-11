@@ -97,25 +97,17 @@ def _items(db: Session, hoy: date, cot: Cotizacion | None, saldos: dict) -> list
 
 def deuda_tarjetas_corriente(db: Session, hoy: date, saldos: dict) -> Decimal:
     """Lo que debés en tarjetas sin las cuotas que vencen en resúmenes futuros (eso no sale ahora)."""
-    from app.models import PlanCuotas
     from app.services import tarjetas as svc_t
-    total = CERO
-    for c in db.scalars(select(Cuenta).where(Cuenta.tipo == TipoCuenta.tarjeta_credito, Cuenta.archivada.is_(False),
-                                             Cuenta.moneda == Moneda.ARS)):
-        deuda = max(-saldos.get(c.id, CERO), CERO)
-        abierto = svc_t.proximo_periodo(c, hoy)
-        futuras = CERO
-        for pl in db.scalars(select(PlanCuotas).where(PlanCuotas.cuenta_id == c.id)):
-            restantes = pl.cuotas_total - max(0, svc_t.distancia(pl.primer_periodo, abierto) + 1)
-            futuras += pl.monto_cuota * max(0, min(restantes, pl.cuotas_total))
-        total += max(CERO, deuda - futuras)
-    return total
+    return sum((svc_t.deuda_corriente(db, c, saldos.get(c.id, CERO), hoy)[0]
+                for c in db.scalars(select(Cuenta).where(Cuenta.tipo == TipoCuenta.tarjeta_credito,
+                                                         Cuenta.archivada.is_(False), Cuenta.moneda == Moneda.ARS))), CERO)
 
 
 def gasto_mensual_promedio(db: Session, hoy: date) -> Decimal:
     movs = db.scalars(select(Movimiento.monto).where(
         Movimiento.tipo == TipoMovimiento.gasto, Movimiento.estado == EstadoMovimiento.confirmado,
         Movimiento.moneda == Moneda.ARS, Movimiento.deuda_id.is_(None),
+        (Movimiento.cuotas.is_(None)) | (Movimiento.cuotas <= 1),  # las compras en cuotas van por cuota
         Movimiento.fecha.between(hoy - timedelta(days=90), hoy)))
     return (sum(movs, CERO) / 90 * Decimal("30.4")).quantize(Decimal("1"))
 

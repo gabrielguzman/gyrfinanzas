@@ -25,13 +25,15 @@ PALABRAS_INGRESO = {
 RELLENO = {
     "el", "la", "los", "las", "de", "del", "en", "con", "un", "una", "me", "le", "por",
     "y", "a", "al", "pague", "gaste", "compre", "cobre", "cobro", "hoy", "ayer",
-    "anteayer", "pesos", "peso", "$", "cuota", "cuotas", "sin", "interes",
+    "anteayer", "pesos", "peso", "$", "cuota", "cuotas", "fijas", "sin", "interes",
 } | PALABRAS_USD
 
 RE_MONTO = re.compile(
     r"(?<![\w.,])(\d+(?:[.,]\d+)*)\s*(k|mil|lucas?|palos?|millon(?:es)?|m)?(?![\w])"
 )
-RE_CUOTAS = re.compile(r"(\d+)\s*cuotas?")
+RE_CUOTAS = re.compile(
+    r"(\d+)\s*cuotas?(?:\s+(?:fijas\s+)?de\s+\$?\s*(\d+(?:[.,]\d+)*)\s*(k|mil|lucas?|palos?|millon(?:es)?|m)?(?!\w))?"
+)
 # «garantía 1 año», «con garantía de 6 meses», «garantia 2 años», «garantía» a secas
 RE_GARANTIA = re.compile(
     r"(?<!\w)(?:con\s+)?garantia(?:\s+(?:de|por))?"
@@ -114,6 +116,7 @@ class Resultado:
 
 def _buscar_monto(norm: str) -> tuple[Decimal | None, tuple[int, int] | None]:
     cuotas_spans = [m.span(1) for m in RE_CUOTAS.finditer(norm)]
+    cuotas_spans += [m.span(2) for m in RE_CUOTAS.finditer(norm) if m.group(2)]  # «de 110k» es la cuota
     cuotas_spans += [m.span(1) for m in RE_GARANTIA.finditer(norm) if m.group(1)]
     candidatos = []
     for m in RE_MONTO.finditer(norm):
@@ -230,6 +233,15 @@ def interpretar(
         partes.append((*span_monto, "monto"))
     m_cuotas = RE_CUOTAS.search(norm)
     cuotas = int(m_cuotas.group(1)) if m_cuotas else None
+    # «12 cuotas de 110k»: lo que se debe es 12 × la cuota (incluye el interés)
+    if m_cuotas and m_cuotas.group(2) and cuotas:
+        valor = _numero(m_cuotas.group(2), bool(m_cuotas.group(3)))
+        if valor:
+            if m_cuotas.group(3):
+                valor *= MULTIPLICADORES[m_cuotas.group(3)]
+            monto = (valor * cuotas).quantize(Decimal("0.01"))
+            if span_monto is None:
+                span_monto = m_cuotas.span(2)
     if m_cuotas:
         partes.append((*m_cuotas.span(), "cuotas"))
     garantia_meses, span_gar = _garantia(norm)

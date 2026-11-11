@@ -9,6 +9,7 @@ from app.db import get_db
 from app.models import Cuenta, EstadoMovimiento, Movimiento, MovimientoAdjunto, TipoCuenta, TipoMovimiento
 from app.schemas import InicioOut, TotalMoneda
 from app.services.saldos import saldos_por_cuenta
+from app.services.tarjetas import deuda_corriente
 
 router = APIRouter(prefix="/inicio", tags=["inicio"])
 
@@ -18,14 +19,18 @@ def inicio(db: Session = Depends(get_db)):
     saldos = saldos_por_cuenta(db)
     por_moneda: dict = {}
     for c in db.scalars(select(Cuenta).where(Cuenta.archivada.is_(False))):
-        t = por_moneda.setdefault(c.moneda, {"en_cuentas": Decimal("0"), "deuda": Decimal("0")})
+        t = por_moneda.setdefault(c.moneda, {"en_cuentas": Decimal("0"), "deuda": Decimal("0"), "futuras": Decimal("0")})
         saldo = saldos.get(c.id, Decimal("0"))
         if c.tipo == TipoCuenta.tarjeta_credito:
-            t["deuda"] += max(-saldo, Decimal("0"))
+            # Una compra en cuotas no se paga toda ahora: solo resta lo que vence en el resumen abierto
+            ahora, futuras = deuda_corriente(db, c, saldo)
+            t["deuda"] += ahora
+            t["futuras"] += futuras
         else:
             t["en_cuentas"] += saldo
     totales = [
-        TotalMoneda(moneda=m, en_cuentas=v["en_cuentas"], deuda_tarjetas=v["deuda"], disponible=v["en_cuentas"] - v["deuda"])
+        TotalMoneda(moneda=m, en_cuentas=v["en_cuentas"], deuda_tarjetas=v["deuda"], cuotas_futuras=v["futuras"],
+                    disponible=v["en_cuentas"] - v["deuda"])
         for m, v in sorted(por_moneda.items(), key=lambda kv: kv[0].value)
     ]
 

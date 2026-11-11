@@ -124,7 +124,7 @@ export interface Archivo {
   garantia?: string | null;
 }
 export interface Inicio {
-  totales: { moneda: Moneda; en_cuentas: string; deuda_tarjetas: string; disponible: string }[];
+  totales: { moneda: Moneda; en_cuentas: string; deuda_tarjetas: string; cuotas_futuras?: string; disponible: string }[];
   pendientes: number;
   sin_comprobante_mes: number;
 }

@@ -1,6 +1,7 @@
 """Resumen del mes para el Inicio: en qué se fue la plata y a qué ritmo."""
 import calendar
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
@@ -9,7 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
-from app.models import Deuda, EstadoMovimiento, Moneda, Movimiento, TipoDeuda, TipoMovimiento
+from app.models import Categoria, Deuda, EstadoMovimiento, Moneda, Movimiento, PlanCuotas, TipoDeuda, TipoMovimiento
+from app.services.tarjetas import cuota_en, periodo
 from app.schemas import CategoriaTotal, PuntoDiario, ResumenMes
 
 router = APIRouter(prefix="/resumen", tags=["resumen"])
@@ -21,7 +23,26 @@ def _rango(anio: int, mes: int) -> tuple[date, date, int]:
     return date(anio, mes, 1), date(anio, mes, dias), dias
 
 
-def _acumulado(movs: list[Movimiento], dias: int, hasta: int) -> list[PuntoDiario]:
+@dataclass
+class Gasto:
+    """Un gasto del mes: un movimiento, o la cuota del mes de una compra en cuotas."""
+    fecha: date
+    monto: Decimal
+    categoria: Categoria | None
+
+
+def _cuotas_del_mes(db: Session, anio: int, mes: int) -> list[Gasto]:
+    """Las cuotas que caen en el resumen de ese mes (se cuentan el día 1: son un cargo del mes)."""
+    per = periodo(anio, mes)
+    out = []
+    for pl in db.scalars(select(PlanCuotas).where(PlanCuotas.moneda == Moneda.ARS)):
+        if cuota_en(pl, per):
+            mov = db.get(Movimiento, pl.movimiento_id) if pl.movimiento_id else None
+            out.append(Gasto(date(anio, mes, 1), pl.monto_cuota, mov.categoria if mov else None))
+    return out
+
+
+def _acumulado(movs: list, dias: int, hasta: int) -> list[PuntoDiario]:
     por_dia: dict[int, Decimal] = defaultdict(lambda: CERO)
     for m in movs:
         por_dia[m.fecha.day] += m.monto
@@ -54,9 +75,13 @@ def resumen(mes: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}$"), db:
     # Prestar plata o recibir un préstamo no es gastar ni ganar: se deja afuera.
     me_deben = set(db.scalars(select(Deuda.id).where(Deuda.tipo == TipoDeuda.me_deben)))
     cuenta = lambda x: not x.deuda_id or (x.tipo == TipoMovimiento.gasto and x.deuda_id not in me_deben)
+    # Una compra en cuotas no es gasto del mes por el total: cuenta su cuota en cada mes.
+    en_cuotas = lambda x: bool(x.cuotas and x.cuotas > 1)  # noqa: E731
     del_mes = [x for x in del_mes if cuenta(x)]
-    del_anterior = [x for x in del_anterior if cuenta(x)]
-    gastos = [x for x in del_mes if x.tipo == TipoMovimiento.gasto]
+    del_anterior = [Gasto(x.fecha, x.monto, x.categoria) for x in del_anterior if cuenta(x) and not en_cuotas(x)]
+    del_anterior += _cuotas_del_mes(db, anio_ant, mes_ant)
+    gastos = [Gasto(x.fecha, x.monto, x.categoria) for x in del_mes if x.tipo == TipoMovimiento.gasto and not en_cuotas(x)]
+    gastos += _cuotas_del_mes(db, anio, m)
     ingresos = sum((x.monto for x in del_mes if x.tipo == TipoMovimiento.ingreso), CERO)
 
     es_actual = (anio, m) == (hoy.year, hoy.month)

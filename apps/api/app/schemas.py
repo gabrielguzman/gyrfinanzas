@@ -266,7 +266,8 @@ class ResumenMes(BaseModel):
 class TotalMoneda(BaseModel):
     moneda: Moneda
     en_cuentas: Decimal
-    deuda_tarjetas: Decimal
+    deuda_tarjetas: Decimal      # lo que vence (resumen cerrado + el abierto)
+    cuotas_futuras: Decimal = Decimal("0")  # cuotas de resúmenes siguientes: deuda, pero no sale ahora
     disponible: Decimal
 
 
