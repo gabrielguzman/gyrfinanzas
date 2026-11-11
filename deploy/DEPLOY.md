@@ -3,7 +3,8 @@
 El deploy lo hace GitHub Actions: en cada push a `main` corre los tests, construye las imágenes
 (`ghcr.io/gabrielguzman/gyrfinanzas-api` y `-web`) y, si están los secretos, entra al servidor y
 actualiza **solo** `~/apps/gyrfinanzas`. Todo corre con su propio proyecto de Docker Compose
-(`gyrfinanzas`), su propia red y sus volúmenes; la web escucha solo en `127.0.0.1:WEB_PORT`.
+(`gyrfinanzas`), su propia red y sus volúmenes. Solo la web se suma a la red `coolify` con etiquetas
+de Traefik, así el proxy de Coolify publica `DOMINIO` con HTTPS (igual que tus otros proyectos de Compose).
 
 ## Una sola vez, en el servidor
 
@@ -22,8 +23,9 @@ nano .env
 docker compose up -d && docker compose ps
 ```
 
-Después, apuntá tu dominio (por ejemplo `finanzas.tudominio.com`) a `127.0.0.1:WEB_PORT` con el
-proxy que ya uses (nginx, Caddy, Traefik…) y con HTTPS.
+Antes, creá el registro DNS **A** de `DOMINIO` apuntando a la IP del servidor. Traefik saca el
+certificado solo la primera vez que alguien entra. Para probar desde el servidor sin dominio:
+`curl -I http://127.0.0.1:3410/entrar`.
 
 ## Deploy automático (GitHub → servidor)
 
