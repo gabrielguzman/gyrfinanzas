@@ -1,6 +1,6 @@
 // Service worker mínimo: la app abre sin conexión y los estáticos van desde caché.
 // La API no se cachea: los datos siempre se piden frescos.
-const CACHE = "gyr-v2"; // subir cuando cambien íconos o lo cacheado
+const CACHE = "gyr-v4"; // cuentas individuales; descarta las páginas de acceso antiguas
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(["/"])));
@@ -17,6 +17,7 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/api/") || ["/entrar", "/activar", "/recuperar", "/registro", "/cuenta"].includes(url.pathname)) return;
 
   if (e.request.mode === "navigate") {
     e.respondWith(

@@ -424,7 +424,15 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${apiBase()}${path}`, { credentials: "same-origin", ...init });
+  const headers = new Headers(init?.headers);
+  // La pestaña conserva su identidad: si otra pestaña cambia de cuenta, la API
+  // rechaza una escritura antigua en vez de aplicarla al usuario nuevo.
+  if (typeof window !== "undefined" && !path.startsWith("/auth")) {
+    const id = sessionStorage.getItem("gyr-identidad");
+    if (id && id !== "local") headers.set("X-Gyr-Usuario", id);
+  }
+  const res = await fetch(`${apiBase()}${path}`, { credentials: "same-origin", ...init, headers });
+  if (res.status === 409 && res.headers.get("X-Gyr-Cambio-Cuenta")) window.location.reload();
   if (res.status === 401 && !path.startsWith("/auth") && typeof window !== "undefined" && window.location.pathname !== "/entrar") {
     window.location.href = `/entrar?volver=${encodeURIComponent(window.location.pathname)}`;
   }

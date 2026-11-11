@@ -34,22 +34,27 @@ INGRESOS = {
 }
 
 
+def sembrar(db) -> None:
+    existentes = {(c.nombre, c.tipo): c for c in db.scalars(select(Categoria))}
+    nuevas = completadas = 0
+    for tipo, catalogo in ((TipoCategoria.gasto, GASTOS), (TipoCategoria.ingreso, INGRESOS)):
+        for nombre, (palabras, icono, color) in catalogo.items():
+            cat = existentes.get((nombre, tipo))
+            if cat is None:
+                db.add(Categoria(nombre=nombre, tipo=tipo, palabras=palabras, icono=icono, color=color))
+                nuevas += 1
+            elif not cat.icono or not cat.color:
+                cat.icono = cat.icono or icono
+                cat.color = cat.color or color
+                completadas += 1
+    db.flush()
+    print(f"Categorías nuevas: {nuevas} · actualizadas: {completadas}")
+
+
 def main() -> None:
     with SessionLocal() as db:
-        existentes = {(c.nombre, c.tipo): c for c in db.scalars(select(Categoria))}
-        nuevas = completadas = 0
-        for tipo, catalogo in ((TipoCategoria.gasto, GASTOS), (TipoCategoria.ingreso, INGRESOS)):
-            for nombre, (palabras, icono, color) in catalogo.items():
-                cat = existentes.get((nombre, tipo))
-                if cat is None:
-                    db.add(Categoria(nombre=nombre, tipo=tipo, palabras=palabras, icono=icono, color=color))
-                    nuevas += 1
-                elif not cat.icono or not cat.color:
-                    cat.icono = cat.icono or icono
-                    cat.color = cat.color or color
-                    completadas += 1
+        sembrar(db)
         db.commit()
-        print(f"Categorías nuevas: {nuevas} · actualizadas: {completadas}")
 
 
 if __name__ == "__main__":

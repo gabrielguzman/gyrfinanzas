@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { CalendarRange, FileText, HandCoins, Home, List, Monitor, Moon, Goal, Landmark, LogOut, Plus, ShieldCheck, ShoppingBag, Sun, Target, Wallet } from "lucide-react";
 import { SWRConfig, useSWRConfig } from "swr";
 import { fetcher } from "@/lib/api";
-import { vaciarCola } from "@/lib/cola";
+import { vaciarCola, vincularCola } from "@/lib/cola";
 import { useTema, type Tema } from "@/lib/hooks";
 import { CapturaSheet } from "./CapturaSheet";
 import { GarantiaSheet, type GarantiaAbierta } from "./Garantias";
@@ -46,11 +46,12 @@ const NAV = [
   { href: "/semana", label: "Tu semana", Icon: CalendarRange },
   { href: "/comprobantes", label: "Comprobantes", Icon: FileText },
   { href: "/garantias", label: "Garantías", Icon: ShieldCheck },
+  { href: "/cuenta", label: "Tu cuenta", Icon: ShieldCheck },
 ] as const;
 // En el celu entran cuatro: Comprobantes y Garantías se abren desde Movimientos, Tu semana desde Inicio.
 // El plan se abre desde la tarjeta «Hoy podés gastar» de Inicio.
 // Metas y Patrimonio, desde Cuentas e Inicio.
-const NAV_CELU = NAV.filter((n) => !["/comprobantes", "/semana", "/garantias", "/plan", "/metas", "/patrimonio", "/comprar"].includes(n.href));
+const NAV_CELU = NAV.filter((n) => !["/comprobantes", "/semana", "/garantias", "/plan", "/metas", "/patrimonio", "/comprar", "/cuenta"].includes(n.href));
 
 function activa(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -120,7 +121,7 @@ function Interior({ children }: { children: ReactNode }) {
         refrescar();
       }
     };
-    sincronizar();
+    sincronizar().catch(() => {});
     window.addEventListener("online", sincronizar);
     return () => window.removeEventListener("online", sincronizar);
   }, [aviso, refrescar]);
@@ -181,7 +182,10 @@ function Interior({ children }: { children: ReactNode }) {
           </div>
         </aside>
 
-        <main className="mx-auto w-full max-w-md px-5 pt-6 pb-32 lg:max-w-6xl lg:px-10 lg:pt-10 lg:pb-16">{children}</main>
+        <main className="mx-auto w-full max-w-md px-5 pt-6 pb-32 lg:max-w-6xl lg:px-10 lg:pt-10 lg:pb-16">
+          <div className="mb-4 flex justify-end lg:hidden"><Link href="/cuenta" className="press rounded-xl px-3 py-2 text-sm font-bold text-muted">Tu cuenta</Link></div>
+          {children}
+        </main>
       </div>
 
       {/* Barra inferior (celu) */}
@@ -255,20 +259,42 @@ export function Salir() {
   }, []);
   if (!requiere) return null;
   return (
+    <div className="flex flex-wrap items-center">
+    <Link href="/cuenta" className="press px-3 py-2 text-sm font-bold text-muted">Tu cuenta</Link>
     <button
       onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/entrar"; }}
       className="press flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-bold text-muted hover:bg-surface-2"
     >
       <LogOut size={17} /> Salir
     </button>
+    </div>
   );
 }
 
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const publica = ["/entrar", "/activar", "/recuperar", "/registro"].includes(pathname);
+  const [lista, setLista] = useState(false);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    if (publica) { setLista(false); return; }
+    let cancelada = false;
+    fetch("/api/auth/estado").then(r => { if (!r.ok) throw new Error(); return r.json(); }).then(e => {
+      if (cancelada) return;
+      if (!e.ok) { window.location.replace(`/entrar?volver=${encodeURIComponent(window.location.pathname)}`); return; }
+      const id = e.usuario?.id || "local";
+      vincularCola(id, !!e.usuario?.administrador);
+      sessionStorage.setItem("gyr-identidad", id);
+      localStorage.setItem("gyr-identidad", id);
+      setLista(true);
+    }).catch(() => { if (!cancelada) setError(true); });
+    const cambio = (e: StorageEvent) => { if (e.key === "gyr-identidad") window.location.reload(); };
+    window.addEventListener("storage", cambio);
+    return () => { cancelada = true; window.removeEventListener("storage", cambio); };
+  }, [publica]);
   return (
     <SWRConfig value={{ fetcher, revalidateOnFocus: true }}>
-      {pathname === "/entrar" ? children : <Interior>{children}</Interior>}
+      {publica ? children : lista ? <Interior>{children}</Interior> : <main className="flex min-h-dvh items-center justify-center p-6 text-sm text-muted">{error ? <button onClick={() => window.location.reload()}>No pude conectar. Tocá para reintentar.</button> : "Cargando tu cuenta…"}</main>}
     </SWRConfig>
   );
 }

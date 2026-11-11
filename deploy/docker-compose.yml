@@ -74,11 +74,11 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=${PROXY_NETWORK:-coolify}
-      - traefik.http.routers.gyrfinanzas.rule=Host(`${DOMINIO:?Falta DOMINIO en deploy/.env}`)
+      - traefik.http.routers.gyrfinanzas.rule=Host(`${DOMINIO:-${APP_DOMAIN:?Falta DOMINIO o APP_DOMAIN en deploy/.env}}`)
       - traefik.http.routers.gyrfinanzas.entrypoints=${TRAEFIK_ENTRYPOINT_HTTPS:-https}
       - traefik.http.routers.gyrfinanzas.tls=true
       - traefik.http.routers.gyrfinanzas.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
-      - traefik.http.routers.gyrfinanzas-http.rule=Host(`${DOMINIO}`)
+      - traefik.http.routers.gyrfinanzas-http.rule=Host(`${DOMINIO:-${APP_DOMAIN}}`)
       - traefik.http.routers.gyrfinanzas-http.entrypoints=${TRAEFIK_ENTRYPOINT_HTTP:-http}
       - traefik.http.routers.gyrfinanzas-http.middlewares=gyrfinanzas-https
       - traefik.http.middlewares.gyrfinanzas-https.redirectscheme.scheme=https

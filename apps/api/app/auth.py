@@ -74,8 +74,17 @@ VENTANA, MAX_FALLOS = 15 * 60, 5
 
 
 def _ip(request: Request) -> str:
-    reenviada = request.headers.get("x-forwarded-for", "")
-    return reenviada.split(",")[0].strip() or (request.client.host if request.client else "?")
+    return request.client.host if request.client else "?"
+
+
+def limitar(clave: str, maximo: int, ventana: int):
+    ahora = time.time()
+    q = _fallos[clave]
+    while q and ahora-q[0] > ventana:
+        q.popleft()
+    if len(q) >= maximo:
+        raise HTTPException(429, "Demasiados intentos. Esperá unos minutos.")
+    q.append(ahora)
 
 
 def _bloqueado(ip: str, ahora: float) -> bool:
@@ -86,6 +95,24 @@ def _bloqueado(ip: str, ahora: float) -> bool:
 
 
 async def middleware(request: Request, call_next):
+    if settings.usuarios_habilitados:
+        from app import accounts
+        from starlette.concurrency import run_in_threadpool
+        if request.method not in ("GET", "HEAD", "OPTIONS"):
+            origin = request.headers.get("origin")
+            permitidos = {settings.app_url.rstrip("/"), *[o.strip().rstrip("/") for o in settings.cors_origins.split(",")]}
+            if origin and origin.rstrip("/") not in permitidos:
+                return JSONResponse({"detail": "Origen no permitido"}, status_code=403)
+        request.state.usuario = await run_in_threadpool(accounts.resolver, request.cookies.get(accounts.COOKIE))
+        esperado = request.headers.get("x-gyr-usuario")
+        if esperado and request.state.usuario and esperado != str(request.state.usuario.id):
+            return JSONResponse({"detail": "Cambiaste de cuenta. Recargá la página."}, status_code=409,
+                                headers={"X-Gyr-Cambio-Cuenta": "true"})
+        if request.method != "OPTIONS" and not request.url.path.startswith(LIBRES) and request.state.usuario is None:
+            return JSONResponse({"detail": "Iniciá sesión con tu email"}, status_code=401)
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        return response
     if not activo() or request.method == "OPTIONS" or request.url.path.startswith(LIBRES):
         return await call_next(request)
     if not sesion_valida(request.cookies.get(COOKIE)):
@@ -97,16 +124,31 @@ router = APIRouter(prefix="/auth", tags=["sistema"])
 
 
 class LoginIn(BaseModel):
+    email: str = Field(default="", max_length=254)
     password: str = Field(min_length=1, max_length=200)
 
 
 @router.get("/estado")
 def estado(request: Request):
+    if settings.usuarios_habilitados:
+        from app import accounts, mailer
+        u = getattr(request.state, "usuario", None)
+        return {"requiere": True, "ok": u is not None, "modo": "usuarios", "correo_configurado": mailer.disponible(), "usuario": accounts.publico(u) if u else None}
     return {"requiere": activo(), "ok": (not activo()) or sesion_valida(request.cookies.get(COOKIE))}
 
 
 @router.post("/login")
 def login(datos: LoginIn, request: Request, response: Response):
+    if settings.usuarios_habilitados:
+        from app import accounts
+        from app.db import SessionLocal
+        from pydantic import ValidationError
+        try:
+            entrada = accounts.LoginIn(email=datos.email, password=datos.password)
+        except ValidationError:
+            raise HTTPException(422, "Ingresá un email válido") from None
+        with SessionLocal() as db:
+            return accounts.login(entrada, request, response, db)
     if not activo():
         return {"ok": True}
     if not settings.secret_key:
@@ -124,13 +166,24 @@ def login(datos: LoginIn, request: Request, response: Response):
 
 
 @router.post("/logout")
-def logout(response: Response):
+def logout(response: Response, request: Request):
+    if settings.usuarios_habilitados:
+        from app import accounts
+        from app.accounts_models import TokenAcceso
+        from app.db import SessionLocal
+        from sqlalchemy import delete
+        raw = request.cookies.get(accounts.COOKIE)
+        if raw:
+            with SessionLocal() as db:
+                db.execute(delete(TokenAcceso).where(TokenAcceso.hash == accounts.digest(raw)))
+                db.commit()
+        response.delete_cookie(accounts.COOKIE, path="/")
     response.delete_cookie(COOKIE, path="/")
     return {"ok": True}
 
 
 if __name__ == "__main__":
-    # La contraseña puede venir como argumento o en GYR_PASSWORD (así no queda en el historial)
+    # La contraseña puede venir como argumento o en GYR_PASSWORD (sin historial).
     pw = sys.argv[1] if len(sys.argv) == 2 else os.environ.get("GYR_PASSWORD", "")
     if not pw:
         print('Uso: python -m app.auth "tu contraseña"   (o GYR_PASSWORD=... python -m app.auth)')

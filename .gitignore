@@ -23,5 +23,8 @@ tsconfig.tsbuildinfo
 
 # Producción
 deploy/.env
+deploy/.env.*
+!deploy/.env.example
+deploy/access-password.txt
 deploy/backups/*
 !deploy/backups/.gitkeep

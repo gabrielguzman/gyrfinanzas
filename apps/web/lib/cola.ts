@@ -5,6 +5,21 @@
 import { api } from "./api";
 
 const CLAVE = "gyr-cola-captura";
+let identidad: string | null = null;
+
+export function vincularCola(id: string, administrador = false) {
+  identidad = id;
+  const clave = `${CLAVE}:${id}`;
+  if (administrador && localStorage.getItem(CLAVE)) {
+    // Las cargas previas a las cuentas pertenecen al propietario original.
+    const viejas = JSON.parse(localStorage.getItem(CLAVE) || "[]");
+    const propias = JSON.parse(localStorage.getItem(clave) || "[]");
+    localStorage.setItem(clave, JSON.stringify([...propias, ...viejas]));
+    localStorage.removeItem(CLAVE);
+  }
+}
+
+function claveActual() { return identidad ? `${CLAVE}:${identidad}` : CLAVE; }
 
 interface Pendiente {
   texto: string;
@@ -14,7 +29,7 @@ interface Pendiente {
 
 function leer(): Pendiente[] {
   try {
-    return JSON.parse(localStorage.getItem(CLAVE) || "[]");
+    return JSON.parse(localStorage.getItem(claveActual()) || "[]");
   } catch {
     return [];
   }
@@ -22,7 +37,7 @@ function leer(): Pendiente[] {
 
 function escribir(items: Pendiente[]) {
   try {
-    localStorage.setItem(CLAVE, JSON.stringify(items));
+    localStorage.setItem(claveActual(), JSON.stringify(items));
   } catch {
     /* almacenamiento no disponible */
   }
@@ -38,6 +53,10 @@ export function cantidadEnCola(): number {
 
 /** Manda lo encolado a la bandeja. Devuelve cuántos se enviaron. */
 export async function vaciarCola(): Promise<number> {
+  if (identidad && identidad !== "local") {
+    const estado = await api.get<{ usuario?: { id: string } }>("/auth/estado");
+    if (estado.usuario?.id !== identidad) return 0;
+  }
   const items = leer();
   if (!items.length) return 0;
   const restantes: Pendiente[] = [];
@@ -48,7 +67,7 @@ export async function vaciarCola(): Promise<number> {
       if (it.medio_pago_id) await api.patch(`/movimientos/${mov.id}`, { medio_pago_id: it.medio_pago_id });
       enviados++;
     } catch (e) {
-      if (e instanceof TypeError) restantes.push(it); // sigue sin red
+      restantes.push(it); // nunca perder cargas si la sesión venció o la red falla
     }
   }
   escribir(restantes);
