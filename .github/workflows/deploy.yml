@@ -78,15 +78,14 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
-          script: |
-            set -e
-            cd ~/apps/gyrfinanzas
-            git fetch --quiet origin main
-            git reset --quiet --hard origin/main
-            cd deploy
-            docker compose pull --quiet
-            docker compose up -d --remove-orphans
-            docker compose ps
+          envs: DOMINIO,APP_PASSWORD,APP_PASSWORD_HASH,TELEGRAM_TOKEN
+          # Baja el script de esta versión del repo y lo corre: clona/crea .env la primera vez y actualiza.
+          script: curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/deploy/servidor.sh" | sh
+        env:
+          DOMINIO: ${{ vars.DOMINIO }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+          APP_PASSWORD_HASH: ${{ secrets.APP_PASSWORD_HASH }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
       - name: Sin servidor configurado
         if: env.DEPLOY_HOST == ''
         run: echo "Imágenes publicadas. Falta configurar los secretos DEPLOY_* para el deploy automático."

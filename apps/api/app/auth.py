@@ -130,7 +130,9 @@ def logout(response: Response):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print('Uso: python -m app.auth "tu contraseña"')
+    # La contraseña puede venir como argumento o en GYR_PASSWORD (así no queda en el historial)
+    pw = sys.argv[1] if len(sys.argv) == 2 else os.environ.get("GYR_PASSWORD", "")
+    if not pw:
+        print('Uso: python -m app.auth "tu contraseña"   (o GYR_PASSWORD=... python -m app.auth)')
         sys.exit(1)
-    print(generar_hash(sys.argv[1]))
+    print(generar_hash(pw))

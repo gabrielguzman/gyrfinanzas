@@ -6,7 +6,18 @@ actualiza **solo** `~/apps/gyrfinanzas`. Todo corre con su propio proyecto de Do
 (`gyrfinanzas`), su propia red y sus volúmenes. Solo la web se suma a la red `coolify` con etiquetas
 de Traefik, así el proxy de Coolify publica `DOMINIO` con HTTPS (igual que tus otros proyectos de Compose).
 
-## Una sola vez, en el servidor
+## Opción A: todo desde GitHub (sin tocar el servidor)
+
+`deploy/servidor.sh` lo corre GitHub Actions por SSH: la primera vez clona el proyecto y crea
+`deploy/.env` **en el servidor** (genera ahí la contraseña de la base y SECRET_KEY). Solo necesita:
+
+- Secretos: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KEY` y `APP_PASSWORD` (tu contraseña de login;
+  en el servidor se guarda solo el hash). Opcional: `TELEGRAM_TOKEN`.
+- Variable: `DOMINIO` (por ejemplo `finanzas.tudominio.com`).
+
+Después, Actions → «Tests, imágenes y deploy» → Run workflow (o cualquier push a `main`).
+
+## Opción B: a mano, en el servidor
 
 ```sh
 # 1. Traer el proyecto
