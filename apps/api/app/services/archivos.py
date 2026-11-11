@@ -39,6 +39,9 @@ def guardar(db: Session, upload: UploadFile) -> Archivo:
 
     ahora = datetime.now(timezone.utc)
     relativa = Path(f"{ahora:%Y}/{ahora:%m}/{sha}{TIPOS_PERMITIDOS[mime]}")
+    esquema = (db.get_bind().get_execution_options().get("schema_translate_map") or {}).get(None, "public")
+    if esquema != "public":
+        relativa = Path(esquema) / relativa
     destino = Path(settings.upload_dir) / relativa
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_bytes(contenido)

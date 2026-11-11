@@ -49,6 +49,14 @@ La web reenvía `/api/*` a la API, así que el celu solo necesita llegar a la we
 
 La instalación completa como PWA (con modo sin conexión) funciona en producción (`npm run build && npm start`) o desplegada con HTTPS.
 
+## Acceso y cuentas individuales
+
+En producción se entra con email y contraseña. Podés registrarte desde la pantalla de acceso y verificar tu email para elegir
+tu contraseña. El administrador también puede invitar personas desde **Tu cuenta**; cada persona tiene sus propias finanzas privadas.
+El invitado recibe un enlace para elegir una contraseña de al menos 12 caracteres.
+También se puede cambiar la contraseña desde la cuenta o recuperarla por email.
+Ver [configuración y migración de producción](deploy/DEPLOY.md).
+
 ## Bot de Telegram
 
 Cargá gastos escribiéndole a tu bot: `nafta 40k visa`, una foto del ticket, `/saldo`, `/bandeja`.

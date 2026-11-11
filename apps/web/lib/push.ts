@@ -66,3 +66,11 @@ export async function desactivar(): Promise<EstadoAvisos | null> {
   await sub.unsubscribe().catch(() => {});
   return api.post<EstadoAvisos>("/avisos/desuscribir", { endpoint });
 }
+
+/** Al cambiar de cuenta, este navegador deja de recibir avisos de la anterior. */
+export async function desvincularDispositivo(): Promise<void> {
+  const sub = await suscripcionActual();
+  if (sub) await sub.unsubscribe();
+  const reg = await navigator.serviceWorker?.getRegistration();
+  if (reg) for (const n of await reg.getNotifications()) n.close();
+}

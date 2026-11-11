@@ -1,0 +1,29 @@
+services:
+  web:
+    networks: [interna, proxy]
+    labels:
+      traefik.enable: 'true'
+      traefik.docker.network: coolify
+      traefik.http.routers.gyrfinanzas-http.rule: Host(`${APP_DOMAIN:?Falta APP_DOMAIN}`)
+      traefik.http.routers.gyrfinanzas-http.entrypoints: http
+      traefik.http.routers.gyrfinanzas-http.middlewares: gyrfinanzas-https
+      traefik.http.middlewares.gyrfinanzas-https.redirectscheme.scheme: https
+      traefik.http.routers.gyrfinanzas.rule: Host(`${APP_DOMAIN:?Falta APP_DOMAIN}`)
+      traefik.http.routers.gyrfinanzas.entrypoints: https
+      traefik.http.routers.gyrfinanzas.tls: 'true'
+      traefik.http.routers.gyrfinanzas.tls.certresolver: letsencrypt
+      traefik.http.routers.gyrfinanzas.service: gyrfinanzas
+      traefik.http.services.gyrfinanzas.loadbalancer.server.port: '3000'
+      traefik.http.routers.gyrfinanzas-domain-http.rule: Host(`gyrfinanzas.com`) || Host(`www.gyrfinanzas.com`)
+      traefik.http.routers.gyrfinanzas-domain-http.entrypoints: http
+      traefik.http.routers.gyrfinanzas-domain-http.middlewares: gyrfinanzas-https
+      traefik.http.routers.gyrfinanzas-domain-http.service: gyrfinanzas
+      traefik.http.routers.gyrfinanzas-public.rule: Host(`gyrfinanzas.com`) || Host(`www.gyrfinanzas.com`)
+      traefik.http.routers.gyrfinanzas-public.entrypoints: https
+      traefik.http.routers.gyrfinanzas-public.tls: 'true'
+      traefik.http.routers.gyrfinanzas-public.tls.certresolver: letsencrypt
+      traefik.http.routers.gyrfinanzas-public.service: gyrfinanzas
+networks:
+  proxy:
+    external: true
+    name: coolify

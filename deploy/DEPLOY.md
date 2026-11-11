@@ -1,5 +1,94 @@
 # Poner gyrfinanzas en producción
 
+## Instalación del 11 de noviembre de 2026
+
+Servidor: `deploy@64.23.196.133`. Carpeta: `/home/deploy/apps/gyrfinanzas`.
+Dirección inicial: https://finanzas.64.23.196.133.sslip.io.
+Dominio definitivo: https://gyrfinanzas.com (también funciona `www`). El DNS
+en Hostinger apunta a `64.23.196.133`; HTTPS se emite con Let's Encrypt.
+
+Se construyen las imágenes desde el código local (`gyrfinanzas-api:20261111-register1` y
+`gyrfinanzas-web:20261111-register1`). GitHub Actions conserva el flujo de publicación del repositorio; esta instalación manual usa imágenes locales fijadas en `.env`.
+El archivo privado `deploy/.env` selecciona las imágenes y activa
+`COMPOSE_FILE=docker-compose.yml:compose.proxy.yml`. El proxy Traefik existente
+detecta las etiquetas de la web en la red `coolify`; no requiere reiniciarse.
+En `.env`, `APP_DOMAIN` define el dominio (debe resolver a la IP del servidor).
+
+Las contraseñas de las cuentas se guardan como hashes; la contraseña inicial
+compartida quedó reemplazada por la cuenta del propietario. Los datos y
+comprobantes usan volúmenes propios.
+Los backups quedan en `deploy/backups`, con retención de 14 días.
+
+### Cuentas individuales
+
+La instalación usa `USUARIOS_HABILITADOS=true`. El propietario migra desde la
+contraseña compartida mediante un comando de operador (nunca desde la web):
+
+```sh
+docker compose exec api python -m app.bootstrap_account tu@email.com
+```
+
+Se conserva su contraseña y sus datos en `public`. Las sesiones antiguas de la
+contraseña compartida ya no sirven al activar este modo. Cada invitado tiene
+sus finanzas en un esquema PostgreSQL propio `u_<uuid>`; las consultas y tareas
+en segundo plano usan ese esquema explícitamente. Los comprobantes nuevos se
+guardan en un subdirectorio del mismo usuario. El registro público está disponible en `/registro`: se verifica el email antes
+de elegir la contraseña o crear el esquema de finanzas. No hay espacios
+familiares compartidos en esta versión. El bot existente opera solo
+sobre las finanzas del propietario; no ofrece vinculación para otros usuarios.
+
+El registro público envía un enlace de verificación de un solo uso, válido por
+24 horas. Tiene límites por IP, email y un límite global de envíos por hora.
+El registro no permite reclamar una cuenta activa ni modificar su contraseña.
+Desde **Tu cuenta**, el administrador también invita personas por email. El enlace
+vence en 48 horas. Sin SMTP puede compartir un enlace privado manualmente;
+tener ese enlace permite activar la cuenta invitada. Con SMTP se entrega por
+correo. La recuperación vence en 30 minutos y requiere SMTP. Los enlaces son
+de un solo uso; sus secretos se guardan como hashes. Cambiar o restablecer la
+contraseña revoca todas las sesiones del usuario. La contraseña nueva tiene
+un mínimo de 12 caracteres.
+
+El envío se configura en `.env` con `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
+`SMTP_PASSWORD`, `SMTP_FROM` y `APP_URL`. Gmail usa `smtp.gmail.com:465` y una
+contraseña de aplicación. El archivo debe conservar permisos `600`. Nunca
+copiar sus secretos a documentación o git. SMTP fue autenticado con TLS;
+la entrega final de mensajes depende del proveedor y del destinatario.
+
+La revisión `0011` reconcilia las dos revisiones `0010` que existieron en paralelo
+(cuentas, y fijos/reglas/push). Reconoce las tablas ya presentes, preserva sus
+datos y completa lo faltante tanto en `public` como en los esquemas de usuarios.
+No hay que hacer `stamp` manual ni borrar tablas para actualizar.
+
+`alembic upgrade head` migra primero `public` y después los esquemas de usuarios
+activos. El backup completo de PostgreSQL incluye identidades y todos los
+esquemas. Para volver al acceso anterior, restaurar la configuración privada
+`.env.pre-usuarios` y recrear solo API/web con sus imágenes anteriores; no borrar
+los esquemas ni los volúmenes. Esa reversión desactiva temporalmente las cuentas
+de invitados. El respaldo previo está en `deploy/backups/`.
+
+Pruebas de aislamiento (usar una base descartable cuyo nombre termine en
+`_auth_test`, nunca la de producción):
+
+```sh
+cd apps/api
+DATABASE_URL="$GYR_AUTH_TEST_URL" uv run alembic upgrade head
+uv run pytest -q
+```
+
+Si `GYR_AUTH_TEST_URL` está definida, las pruebas borran y recrean los datos
+de esa base de prueba. Sin ella, se omiten las pruebas PostgreSQL de cuentas.
+
+Para operar esta instalación:
+
+```sh
+cd /home/deploy/apps/gyrfinanzas/deploy
+docker compose ps
+docker compose logs --tail=100 api web backup
+docker compose exec backup sh /backup.sh ahora
+```
+
+## Flujo del repositorio con GitHub Actions
+
 El deploy lo hace GitHub Actions: en cada push a `main` corre los tests, construye las imágenes
 (`ghcr.io/gabrielguzman/gyrfinanzas-api` y `-web`) y, si están los secretos, entra al servidor y
 actualiza **solo** `~/apps/gyrfinanzas`. Todo corre con su propio proyecto de Docker Compose

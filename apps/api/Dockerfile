@@ -20,7 +20,9 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app
 
-RUN useradd --uid 10001 --no-create-home gyr && mkdir -p /data/uploads && chown -R gyr /data
+RUN useradd --uid 10001 --no-create-home gyr && mkdir -p /data/uploads \
+    && chown -R gyr /data && chmod -R a+rX /app/app /app/alembic \
+    && chmod a+r /app/alembic.ini
 USER gyr
 EXPOSE 8000
 

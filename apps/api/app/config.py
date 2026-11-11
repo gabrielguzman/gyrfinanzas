@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     secret_key: str = ""          # para firmar la sesión; obligatoria si hay contraseña
     cookie_secure: bool = False   # True detrás de HTTPS
     sesion_dias: int = 90
+    usuarios_habilitados: bool = False
+    app_url: str = "http://localhost:3000"
+    smtp_host: str = ""
+    smtp_port: int = 465
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
     # Programador interno: fijos del día y notificaciones push
     avisos_activos: bool = True
 

@@ -23,11 +23,29 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    from sqlalchemy import text, inspect
+    import re
     engine = create_engine(url)
     with engine.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata, render_as_batch=True)
-        with context.begin_transaction():
-            context.run_migrations()
+        if connection.dialect.name != "postgresql":
+            context.configure(connection=connection, target_metadata=target_metadata, render_as_batch=True)
+            with context.begin_transaction():
+                context.run_migrations()
+            return
+        schemas = ["public"]
+        # Identidades siempre en public; las finanzas de cada usuario migran por separado.
+        if inspect(connection).has_table("auth_usuario", schema="public"):
+            schemas += list(connection.execute(text("SELECT esquema FROM public.auth_usuario WHERE esquema <> 'public' AND activo = true")).scalars())
+        connection.commit()
+        for schema in schemas:
+            if schema != "public" and not re.fullmatch(r"u_[0-9a-f]{32}", schema):
+                raise RuntimeError("Esquema de usuario inválido")
+            with connection.begin():
+                connection.execute(text(f'SET LOCAL search_path TO "{schema}"'))
+                config.attributes["tenant_schema"] = schema
+                context.configure(connection=connection, target_metadata=target_metadata,
+                                  render_as_batch=True, version_table_schema=schema)
+                context.run_migrations()
 
 
 if context.is_offline_mode():
