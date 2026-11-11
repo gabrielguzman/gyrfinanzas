@@ -35,7 +35,7 @@ RE_MONTO = re.compile(
     r"(?<![\w.,])(\d+(?:[.,]\d+)*)\s*(k|mil|lucas?|palos?|millon(?:es)?|m)?(?![\w])"
 )
 RE_CUOTAS = re.compile(
-    r"(\d+)\s*cuotas?(?:\s+(?:fijas\s+)?de\s+\$?\s*(\d+(?:[.,]\d+)*)\s*(k|mil|lucas?|palos?|millon(?:es)?|m)?(?!\w))?"
+    r"(?<![\w.,])(\d{1,2})\s*cuotas?(?:\s+(?:fijas\s+)?de\s+\$?\s*(\d+(?:[.,]\d+)*)\s*(k|mil|lucas?|palos?|millon(?:es)?|m)?(?!\w))?"
 )
 # «garantía 1 año», «con garantía de 6 meses», «garantia 2 años», «garantía» a secas
 RE_GARANTIA = re.compile(
@@ -43,6 +43,12 @@ RE_GARANTIA = re.compile(
     r"(?:\s+(\d+|un|una|dos|tres|cinco)\s*(anos?|anios?|mes(?:es)?)(?!\w))?"
 )
 NUMEROS = {"un": 1, "una": 1, "dos": 2, "tres": 3, "cinco": 5}
+
+
+# Otras formas de decir cuotas: «12 sin interés», «x12», «en 12» (solo cantidades típicas)
+RE_CUOTAS_OTRAS = re.compile(
+    r"(?<![\w.,])(?:(\d{1,2})\s+(?:pagos\s+)?sin\s+interes|x\s?(\d{1,2})(?!\w)|en\s+(2|3|6|9|10|12|15|18|24|36)(?=\s*$|\s*[,;]|\s+(?:visa|master|mastercard|amex|cabal|naranja|con|sin)\b))"
+)
 
 
 def _garantia(norm: str) -> tuple[int | None, tuple[int, int] | None]:
@@ -120,6 +126,7 @@ class Resultado:
 
 def _buscar_monto(norm: str) -> tuple[Decimal | None, tuple[int, int] | None]:
     cuotas_spans = [m.span(1) for m in RE_CUOTAS.finditer(norm)]
+    cuotas_spans += [m.span(next(i for i in (1, 2, 3) if m.group(i))) for m in RE_CUOTAS_OTRAS.finditer(norm)]
     cuotas_spans += [m.span(2) for m in RE_CUOTAS.finditer(norm) if m.group(2)]  # «de 110k» es la cuota
     cuotas_spans += [m.span(1) for m in RE_GARANTIA.finditer(norm) if m.group(1)]
     candidatos = []
@@ -237,6 +244,10 @@ def interpretar(
         partes.append((*span_monto, "monto"))
     m_cuotas = RE_CUOTAS.search(norm)
     cuotas = int(m_cuotas.group(1)) if m_cuotas else None
+    m_otras = None if m_cuotas else RE_CUOTAS_OTRAS.search(norm)
+    if m_otras and monto is not None:  # «en 12» solo si además hay un precio
+        cuotas = int(next(g for g in m_otras.groups() if g))
+        partes.append((*m_otras.span(), "cuotas"))
     # «12 cuotas de 110k»: lo que se debe es 12 × la cuota (incluye el interés)
     if m_cuotas and m_cuotas.group(2) and cuotas:
         valor = _numero(m_cuotas.group(2), bool(m_cuotas.group(3)))

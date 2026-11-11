@@ -44,3 +44,19 @@ def test_ayer_cuotas_y_usd():
     assert r.moneda.value == "USD"
     assert r.cuotas == 3
     assert r.descripcion == "Regalo"
+
+
+import pytest as _pytest
+
+
+@_pytest.mark.parametrize("texto,cuotas", [
+    ("switch 2000000 12 sin interes", 12),
+    ("tele 900k x12", 12),
+    ("aire 600k en 6", 6),
+    ("aire 600k en 6 visa", 6),
+    ("cena en 2 horas 30k", None),
+    ("nafta 40k", None),
+])
+def test_otras_formas_de_cuotas(texto, cuotas):
+    from datetime import date
+    assert interpretar(texto, [], [], hoy=date(2026, 11, 11)).cuotas == cuotas

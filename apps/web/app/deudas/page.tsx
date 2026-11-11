@@ -95,6 +95,23 @@ function Plan({ tarjetas }: { tarjetas: Tarjeta[] }) {
   const conDeuda = tarjetas.filter((t) => Number(t.deuda) > 0);
   if (!sim) return <Esqueleto className="h-96 rounded-[22px]" />;
   if (!sim.deudas.length && !conDeuda.length) return null;
+  if (!sim.deudas.length && !conTarjetas.length) {
+    // Sin deudas con interés: solo tiene sentido si financiás una tarjeta
+    return (
+      <Seccion titulo="Plan para salir">
+        <div className="flex flex-col gap-3 rounded-[22px] bg-surface p-5 shadow-soft">
+          <p className="text-sm text-muted">
+            Tus deudas no tienen interés: con pagar las cuotas y el resumen completo alcanza. Si pagás el mínimo de una tarjeta, elegila y te muestro cómo salir y cuánto te cuesta.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {conDeuda.map((t) => (
+              <Chip key={t.cuenta_id} onClick={() => setConTarjetas([t.cuenta_id])}>Financio {t.nombre}</Chip>
+            ))}
+          </div>
+        </div>
+      </Seccion>
+    );
+  }
 
   const r = sim[estrategia];
   const otra = sim[estrategia === "avalancha" ? "bola_de_nieve" : "avalancha"];
@@ -144,7 +161,7 @@ function Plan({ tarjetas }: { tarjetas: Tarjeta[] }) {
           <Mensaje>Con estos pagos las deudas no bajan: los intereses le ganan a lo que pagás. Sumá un extra por mes.</Mensaje>
         )}
         {comparacion && <p className="text-sm font-semibold">{comparacion}</p>}
-        {r.meses && otra.meses && (
+        {(r.meses ?? 0) > 0 && (otra.meses ?? 0) > 0 && (
           <SaldoDeudasChart
             a={r.serie.map(Number)}
             b={otra.serie.map(Number)}
@@ -242,26 +259,166 @@ const mesCorto = (per: string) => {
   const [a, m] = per.split("-").map(Number);
   return `${MESES[m - 1].slice(0, 3)} ${a}`;
 };
+const pesos = (v: number, moneda: "ARS" | "USD" = "ARS") => monto(Math.round(v), moneda);
 
-/** Una compra en cuotas con tarjeta: también es deuda. */
-function FilaCuotas({ p, tarjeta }: { p: PlanCuotas; tarjeta: string }) {
-  const n = p.cuotas_total - p.restantes + 1;
-  const saldo = Number(p.monto_cuota) * p.restantes;
+function sumarPeriodo(p: string, n: number): string {
+  const [a, m] = p.split("-").map(Number);
+  const t = a * 12 + (m - 1) + n;
+  return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, "0")}`;
+}
+function distancia(desde: string, hasta: string): number {
+  const [a1, m1] = desde.split("-").map(Number);
+  const [a2, m2] = hasta.split("-").map(Number);
+  return a2 * 12 + m2 - (a1 * 12 + m1);
+}
+const cuotaEn = (p: PlanCuotas, per: string) => {
+  const k = distancia(p.primer_periodo, per) + 1;
+  return k >= 1 && k <= p.cuotas_total;
+};
+/** Cuándo vence el resumen que cierra en el periodo (igual que en la API). */
+function vencimiento(t: Tarjeta, per: string): Date {
+  const [a, m] = per.split("-").map(Number);
+  const dc = t.dia_cierre ?? 25;
+  const cierre = new Date(a, m - 1, Math.min(dc, new Date(a, m, 0).getDate()));
+  if (!t.dia_vencimiento) return new Date(cierre.getTime() + 10 * 86400000);
+  const v = new Date(a, m - 1, Math.min(t.dia_vencimiento, new Date(a, m, 0).getDate()));
+  return v > cierre ? v : new Date(a, m, Math.min(t.dia_vencimiento, new Date(a, m + 1, 0).getDate()));
+}
+const fechaDe = (d: Date) => d.toISOString().slice(0, 10);
+
+const COLORES = { resumen: "#8fa3c4", cuotas: "#e8762d", prestamos: "#2f5bea", personas: "#d4a017" };
+
+function Barra({ partes }: { partes: { label: string; valor: number; color: string }[] }) {
+  const total = partes.reduce((a, p) => a + p.valor, 0);
+  const visibles = partes.filter((p) => p.valor > 0);
+  if (!total) return null;
   return (
-    <Link href={`/tarjetas/${p.cuenta_id}`} className="press flex w-full flex-col gap-2 bg-surface px-4 py-3.5 text-left hover:bg-surface-2">
-      <span className="flex items-center gap-3">
-        <IconoCat icono="tarjeta_credito" color="orange" />
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-[15px] font-bold">{p.descripcion}</span>
-          <span className="truncate text-[13px] text-muted">{tarjeta} · cuota {Math.max(1, n)} de {p.cuotas_total}</span>
-          <span className="truncate text-[13px] text-muted">{monto(p.monto_cuota, p.moneda)}/mes · hasta {mesCorto(p.ultimo_periodo)}</span>
-        </span>
-        <span className="num shrink-0 font-extrabold">{monto(saldo, p.moneda)}</span>
+    <div className="flex flex-col gap-2.5">
+      <div className="flex h-3 gap-[3px] overflow-hidden rounded-full">
+        {visibles.map((p) => <div key={p.label} className="suave h-full rounded-full" style={{ width: `${(p.valor / total) * 100}%`, background: p.color }} />)}
+      </div>
+      <dl className="flex flex-wrap gap-x-5 gap-y-1.5 text-[13px]">
+        {visibles.map((p) => (
+          <div key={p.label} className="flex items-center gap-1.5">
+            <i className="h-2 w-2 rounded-full" style={{ background: p.color }} />
+            <dt className="text-muted">{p.label}</dt>
+            <dd className="num font-bold">{pesos(p.valor)}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+/** Una compra en cuotas, dentro de su tarjeta. */
+function FilaCuotas({ p }: { p: PlanCuotas }) {
+  const pagadas = p.cuotas_total - p.restantes;
+  return (
+    <Link href={`/tarjetas/${p.cuenta_id}`} className="press flex w-full flex-col gap-1.5 py-3 pr-4 pl-[68px] text-left hover:bg-surface-2">
+      <span className="flex items-baseline gap-3">
+        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{p.descripcion}</span>
+        <span className="num shrink-0 font-bold">{pesos(Number(p.monto_cuota) * p.restantes, p.moneda)}</span>
       </span>
-      <span className="h-1.5 overflow-hidden rounded-full bg-surface-2">
-        <span className="block h-full rounded-full bg-[#e8762d] suave" style={{ width: `${((p.cuotas_total - p.restantes) / p.cuotas_total) * 100}%` }} />
+      <span className="text-[13px] text-muted">
+        {p.restantes === 1 ? "Última cuota" : `Faltan ${p.restantes} de ${p.cuotas_total}`} · {pesos(Number(p.monto_cuota), p.moneda)}/mes · hasta {mesCorto(p.ultimo_periodo)}
+      </span>
+      <span className="h-1 overflow-hidden rounded-full bg-surface-2" aria-hidden>
+        <span className="block h-full rounded-full bg-[#e8762d]" style={{ width: `${Math.max(2, (pagadas / p.cuotas_total) * 100)}%` }} />
       </span>
     </Link>
+  );
+}
+
+function GrupoTarjeta({ t }: { t: Tarjeta }) {
+  const planes = t.planes.filter((p) => p.restantes > 0);
+  const enCuotas = planes.reduce((a, p) => a + Number(p.monto_cuota) * p.restantes, 0);
+  const resumen = Math.max(0, Number(t.deuda) - enCuotas);
+  return (
+    <div className="overflow-hidden rounded-[22px] bg-surface shadow-soft">
+      <Link href={`/tarjetas/${t.cuenta_id}`} className="press flex items-center gap-3 px-4 py-3.5 hover:bg-surface-2">
+        <IconoCat icono="tarjeta_credito" color="orange" />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-[15px] font-extrabold">{t.nombre}</span>
+          <span className="truncate text-[13px] text-muted">
+            {t.dia_cierre ? `Cierra el ${t.dia_cierre}${t.dia_vencimiento ? `, vence el ${t.dia_vencimiento}` : ""}` : "Configurá el día de cierre y vencimiento"}
+          </span>
+        </span>
+        <span className="num shrink-0 text-lg font-extrabold">{pesos(Number(t.deuda))}</span>
+      </Link>
+      {resumen > 0 && (
+        <div className="flex items-baseline gap-3 border-t border-line py-3 pr-4 pl-[68px]">
+          <span className="min-w-0 flex-1 text-[15px] font-semibold">Compras en un pago</span>
+          <span className="num shrink-0 font-bold">{pesos(resumen)}</span>
+        </div>
+      )}
+      {planes.map((p) => <div key={p.id} className="border-t border-line"><FilaCuotas p={p} /></div>)}
+    </div>
+  );
+}
+
+interface Pago { fecha: string; que: string; monto: number; href: string }
+
+/** Lo que vence en los próximos ~35 días: resúmenes de tarjeta y cuotas de préstamos. */
+function proximosPagos(tarjetas: Tarjeta[], deudas: Deuda[]): Pago[] {
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const limite = new Date(hoy.getTime() + 35 * 86400000);
+  const out: Pago[] = [];
+  for (const t of tarjetas) {
+    if (Number(t.deuda) <= 0) continue;
+    const planes = t.planes.filter((p) => p.moneda === "ARS");
+    const futuras = planes.reduce((a, p) => {
+      const k = Math.max(0, Math.min(p.cuotas_total, distancia(p.primer_periodo, t.proximo_periodo) + 1));
+      return a + Number(p.monto_cuota) * (p.cuotas_total - k);
+    }, 0);
+    // El resumen abierto: lo que no son cuotas futuras (puede incluir uno ya cerrado sin pagar)
+    const total = Math.max(0, Number(t.deuda) - futuras);
+    const v = vencimiento(t, t.proximo_periodo);
+    if (total > 0) out.push({ fecha: fechaDe(v), que: `Resumen ${t.nombre}`, monto: total, href: `/tarjetas/${t.cuenta_id}` });
+  }
+  for (const d of deudas) {
+    if (d.tipo === "prestamo" && d.proximo_vencimiento && d.cuota_sugerida && new Date(d.proximo_vencimiento + "T12:00:00") <= limite)
+      out.push({ fecha: d.proximo_vencimiento, que: `Cuota ${d.nombre}`, monto: Number(d.cuota_sugerida), href: "/deudas" });
+  }
+  return out.sort((a, b) => a.fecha.localeCompare(b.fecha));
+}
+
+/** Cuánto pagás por mes en cuotas (tarjetas + préstamos) los próximos 12 meses. */
+function Liberacion({ tarjetas, deudas }: { tarjetas: Tarjeta[]; deudas: Deuda[] }) {
+  const base = tarjetas[0]?.proximo_periodo ?? (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; })();
+  const meses = Array.from({ length: 12 }, (_, k) => {
+    const per = sumarPeriodo(base, k);
+    let v = 0;
+    for (const t of tarjetas) for (const p of t.planes) if (p.moneda === "ARS" && cuotaEn(p, per)) v += Number(p.monto_cuota);
+    for (const d of deudas) if (d.tipo === "prestamo" && d.cuota_sugerida && (d.cuotas_restantes ?? 999) > k) v += Number(d.cuota_sugerida);
+    return { per, v };
+  });
+  const max = Math.max(...meses.map((m) => m.v));
+  if (!max) return null;
+  let mayorBaja: { per: string; baja: number } | null = null;
+  for (let i = 1; i < meses.length; i++) {
+    const baja = meses[i - 1].v - meses[i].v;
+    if (baja > 0 && (!mayorBaja || baja > mayorBaja.baja)) mayorBaja = { per: meses[i].per, baja };
+  }
+  const fin = meses.findIndex((m) => m.v === 0);
+  return (
+    <Seccion titulo="Cuándo te liberás">
+      <div className="flex flex-col gap-4 rounded-[22px] bg-surface p-5 shadow-soft">
+        <p className="text-[15px]">
+          Este mes pagás <b className="num whitespace-nowrap">{pesos(meses[0].v)}</b> en cuotas.
+          {mayorBaja && <> En <b>{mesCorto(mayorBaja.per)}</b> se te liberan <b className="num whitespace-nowrap">{pesos(mayorBaja.baja)}</b> por mes.</>}
+          {fin > 0 && <> Desde <b>{mesCorto(meses[fin].per)}</b> no pagás más cuotas.</>}
+        </p>
+        <div className="flex h-28 items-end gap-1.5" aria-hidden>
+          {meses.map((m, i) => (
+            <div key={m.per} className="flex flex-1 flex-col items-center gap-1">
+              <div className="w-full rounded-t-md suave" style={{ height: `${Math.max(m.v ? 4 : 0, (m.v / max) * 92)}px`, background: i === 0 ? "var(--accent)" : "var(--line-strong)" }} />
+              <span className="text-[10px] font-semibold text-faint">{MESES[Number(m.per.split("-")[1]) - 1].slice(0, 1).toUpperCase()}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Seccion>
   );
 }
 
@@ -271,84 +428,94 @@ export default function DeudasPage() {
   const [nueva, setNueva] = useState(false);
   const [abierta, setAbierta] = useState<string | null>(null);
 
-  const debo = deudas?.filter((d) => d.tipo !== "me_deben") ?? [];
-  const meDeben = deudas?.filter((d) => d.tipo === "me_deben") ?? [];
-  // Las compras en cuotas y el resumen de las tarjetas también son deuda
-  const planes = (tarjetas ?? []).flatMap((t) => t.planes.filter((p) => p.restantes > 0).map((p) => ({ p, tarjeta: t.nombre })));
-  const enCuotas = planes.filter(({ p }) => p.moneda === "ARS").reduce((a, { p }) => a + Number(p.monto_cuota) * p.restantes, 0);
-  const cuotaMensual = planes.filter(({ p }) => p.moneda === "ARS" && p.cuota_actual).reduce((a, { p }) => a + Number(p.monto_cuota), 0);
-  const ultimoPlan = planes.map(({ p }) => p.ultimo_periodo).sort().at(-1);
-  const resumenes = (tarjetas ?? []).map((t) => {
-    const cuotasT = t.planes.filter((p) => p.moneda === "ARS").reduce((a, p) => a + Number(p.monto_cuota) * p.restantes, 0);
-    return { t, resto: Math.max(0, Number(t.deuda) - cuotasT) };
-  }).filter((x) => x.resto > 0);
-  const deudaTarjetas = (tarjetas ?? []).reduce((a, t) => a + Number(t.deuda), 0);
-  const totalDebo = debo.filter((d) => d.moneda === "ARS").reduce((a, d) => a + Number(d.saldo), 0) + deudaTarjetas;
-  const hayAlgo = (deudas?.length ?? 0) > 0 || deudaTarjetas > 0;
-  const totalMeDeben = meDeben.filter((d) => d.moneda === "ARS").reduce((a, d) => a + Number(d.saldo), 0);
+  if (!deudas || !tarjetas) return <Esqueleto className="h-96 rounded-[28px]" />;
+
+  const prestamos = deudas.filter((d) => d.tipo === "prestamo");
+  const aPersonas = deudas.filter((d) => d.tipo === "debo");
+  const meDeben = deudas.filter((d) => d.tipo === "me_deben");
+  const ars = (ds: Deuda[]) => ds.filter((d) => d.moneda === "ARS").reduce((a, d) => a + Number(d.saldo), 0);
+  const conDeuda = tarjetas.filter((t) => Number(t.deuda) > 0);
+  const enCuotas = conDeuda.reduce((a, t) => a + t.planes.filter((p) => p.moneda === "ARS").reduce((b, p) => b + Number(p.monto_cuota) * p.restantes, 0), 0);
+  const deTarjetas = conDeuda.reduce((a, t) => a + Number(t.deuda), 0);
+  const partes = [
+    { label: "Resumen de tarjetas", valor: Math.max(0, deTarjetas - enCuotas), color: COLORES.resumen },
+    { label: "Cuotas", valor: enCuotas, color: COLORES.cuotas },
+    { label: "Préstamos", valor: ars(prestamos), color: COLORES.prestamos },
+    { label: "A personas", valor: ars(aPersonas), color: COLORES.personas },
+  ];
+  const total = partes.reduce((a, p) => a + p.valor, 0);
+  const pagos = proximosPagos(conDeuda, prestamos);
+  const vacio = !total && !meDeben.length;
 
   return (
     <div className="flex flex-col gap-7">
       <Titulo extra={<Boton variante="linea" onClick={() => setNueva(true)}><Plus size={18} /> Nueva</Boton>}>Deudas</Titulo>
 
-      {!deudas || !tarjetas ? (
-        <Esqueleto className="h-24" />
-      ) : !hayAlgo ? (
-        <Vacio
-          titulo="No tenés deudas cargadas"
-          accion={<Boton variante="acento" onClick={() => setNueva(true)}><Plus size={18} /> Cargar una</Boton>}
-        >
-          Cargá préstamos con cuotas, lo que le debés a alguien o lo que te deben. También podés escribir en la carga rápida «le presté 20 lucas a juan».
+      {vacio ? (
+        <Vacio titulo="No tenés deudas" accion={<Boton variante="acento" onClick={() => setNueva(true)}><Plus size={18} /> Cargar una</Boton>}>
+          Las compras en cuotas con tarjeta aparecen acá solas. También podés cargar préstamos, lo que le debés a alguien o lo que te deben («le presté 20 lucas a juan»).
         </Vacio>
       ) : (
-        <div className="flex flex-wrap gap-x-12 gap-y-5">
-          <div className="flex max-w-md flex-col gap-2">
-            <Total etiqueta="Debés" valor={totalDebo} />
-            {enCuotas > 0 && (
-              <p className="text-sm text-muted">
-                De eso, <b className="num text-ink">{monto(Math.round(enCuotas))}</b> son compras en cuotas: pagás{" "}
-                <b className="num text-ink">{monto(Math.round(cuotaMensual))}</b> por mes{ultimoPlan && <> y la última termina en {nombrePeriodo(ultimoPlan)}</>}.
-              </p>
-            )}
-          </div>
-          {meDeben.length > 0 && <Total etiqueta="Te deben" valor={totalMeDeben} tono="ok" />}
-        </div>
-      )}
+        <>
+          <section className="flex flex-col gap-5 rounded-[28px] bg-surface p-6 shadow-soft lg:p-8">
+            <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-3">
+              <Total etiqueta="Debés en total" valor={total} />
+              {meDeben.length > 0 && <Total etiqueta="Te deben" valor={ars(meDeben)} tono="ok" />}
+            </div>
+            <Barra partes={partes} />
+          </section>
 
-      <div className="grid grid-cols-1 gap-7 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-start lg:gap-10">
-        <div className="flex min-w-0 flex-col gap-7">
-          {deudas && tarjetas && <Plan tarjetas={tarjetas} />}
-        </div>
-        <div className="flex min-w-0 flex-col gap-7">
-          {debo.length > 0 && (
-            <Seccion titulo="Lo que debés">
-              <Lista>{debo.map((d) => <FilaDeuda key={d.id} d={d} onAbrir={() => setAbierta(d.id)} />)}</Lista>
-            </Seccion>
-          )}
-          {(planes.length > 0 || resumenes.length > 0) && (
-            <Seccion titulo="Tarjetas">
-              <Lista>
-                {planes.map(({ p, tarjeta }) => <FilaCuotas key={p.id} p={p} tarjeta={tarjeta} />)}
-                {resumenes.map(({ t, resto }) => (
-                  <Link key={t.cuenta_id} href={`/tarjetas/${t.cuenta_id}`} className="press flex items-center gap-3 bg-surface px-4 py-3.5 hover:bg-surface-2">
-                    <IconoCat icono="tarjeta_credito" color="slate" />
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate text-[15px] font-bold">{t.nombre}</span>
-                      <span className="truncate text-[13px] text-muted">Compras en un pago · próximo resumen</span>
-                    </span>
-                    <span className="num shrink-0 font-extrabold">{monto(Math.round(resto))}</span>
-                  </Link>
-                ))}
-              </Lista>
-            </Seccion>
-          )}
-          {meDeben.length > 0 && (
-            <Seccion titulo="Te deben">
-              <Lista>{meDeben.map((d) => <FilaDeuda key={d.id} d={d} onAbrir={() => setAbierta(d.id)} />)}</Lista>
-            </Seccion>
-          )}
-        </div>
-      </div>
+          <div className="grid grid-cols-1 gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start lg:gap-x-10">
+            <div className="flex min-w-0 flex-col gap-7 lg:col-start-1 lg:row-start-1">
+              {pagos.length > 0 && (
+                <Seccion titulo="Lo que viene">
+                  <Lista>
+                    {pagos.map((p) => (
+                      <Link key={p.que + p.fecha} href={p.href} className="press flex items-center gap-3 px-4 py-3.5 hover:bg-surface-2">
+                        <span className="flex w-12 shrink-0 flex-col items-center rounded-xl bg-surface-2 py-1.5 leading-none">
+                          <span className="text-lg font-extrabold">{Number(p.fecha.slice(8, 10))}</span>
+                          <span className="text-[11px] font-bold text-muted uppercase">{MESES[Number(p.fecha.slice(5, 7)) - 1].slice(0, 3)}</span>
+                        </span>
+                        <span className="min-w-0 flex-1 truncate font-bold">{p.que}</span>
+                        <span className="num shrink-0 font-extrabold">{pesos(p.monto)}</span>
+                      </Link>
+                    ))}
+                  </Lista>
+                  <p className="text-xs text-faint">El resumen incluye las cuotas de ese mes y las compras en un pago.</p>
+                </Seccion>
+              )}
+              <Liberacion tarjetas={conDeuda} deudas={prestamos} />
+            </div>
+
+            <div className="flex min-w-0 flex-col gap-7 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+              {conDeuda.length > 0 && (
+                <Seccion titulo="Tarjetas">
+                  {conDeuda.map((t) => <GrupoTarjeta key={t.cuenta_id} t={t} />)}
+                </Seccion>
+              )}
+              {prestamos.length > 0 && (
+                <Seccion titulo="Préstamos">
+                  <Lista>{prestamos.map((d) => <FilaDeuda key={d.id} d={d} onAbrir={() => setAbierta(d.id)} />)}</Lista>
+                </Seccion>
+              )}
+              {aPersonas.length > 0 && (
+                <Seccion titulo="Le debés a">
+                  <Lista>{aPersonas.map((d) => <FilaDeuda key={d.id} d={d} onAbrir={() => setAbierta(d.id)} />)}</Lista>
+                </Seccion>
+              )}
+              {meDeben.length > 0 && (
+                <Seccion titulo="Te deben">
+                  <Lista>{meDeben.map((d) => <FilaDeuda key={d.id} d={d} onAbrir={() => setAbierta(d.id)} />)}</Lista>
+                </Seccion>
+              )}
+            </div>
+
+            <div className="flex min-w-0 flex-col gap-7 lg:col-start-1 lg:row-start-2">
+              <Plan tarjetas={tarjetas} />
+            </div>
+          </div>
+        </>
+      )}
 
       <NuevaDeudaSheet abierto={nueva} onCerrar={() => setNueva(false)} />
       <DeudaSheet id={abierta} onCerrar={() => setAbierta(null)} />
