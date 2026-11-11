@@ -1,13 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { Plus } from "lucide-react";
 import { DeudaSheet, NuevaDeudaSheet, iconoDeuda } from "@/components/Deudas";
 import { SaldoDeudasChart } from "@/components/Graficos";
 import { Boton, Chip, Esqueleto, IconoCat, Lista, Mensaje, Seccion, Titulo, Vacio, cx, inputCls } from "@/components/ui";
-import { api, type Deuda, type Simulacion, type Tarjeta } from "@/lib/api";
-import { fechaCorta, MESES, monto } from "@/lib/format";
+import { api, type Deuda, type Plan as PlanCuotas, type Simulacion, type Tarjeta } from "@/lib/api";
+import { fechaCorta, MESES, monto, nombrePeriodo } from "@/lib/format";
 import { useContador } from "@/lib/hooks";
 
 const EXTRAS = [0, 20000, 50000, 100000];
@@ -237,6 +238,33 @@ function Plan({ tarjetas }: { tarjetas: Tarjeta[] }) {
   );
 }
 
+const mesCorto = (per: string) => {
+  const [a, m] = per.split("-").map(Number);
+  return `${MESES[m - 1].slice(0, 3)} ${a}`;
+};
+
+/** Una compra en cuotas con tarjeta: también es deuda. */
+function FilaCuotas({ p, tarjeta }: { p: PlanCuotas; tarjeta: string }) {
+  const n = p.cuotas_total - p.restantes + 1;
+  const saldo = Number(p.monto_cuota) * p.restantes;
+  return (
+    <Link href={`/tarjetas/${p.cuenta_id}`} className="press flex w-full flex-col gap-2 bg-surface px-4 py-3.5 text-left hover:bg-surface-2">
+      <span className="flex items-center gap-3">
+        <IconoCat icono="tarjeta_credito" color="orange" />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-[15px] font-bold">{p.descripcion}</span>
+          <span className="truncate text-[13px] text-muted">{tarjeta} · cuota {Math.max(1, n)} de {p.cuotas_total}</span>
+          <span className="truncate text-[13px] text-muted">{monto(p.monto_cuota, p.moneda)}/mes · hasta {mesCorto(p.ultimo_periodo)}</span>
+        </span>
+        <span className="num shrink-0 font-extrabold">{monto(saldo, p.moneda)}</span>
+      </span>
+      <span className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+        <span className="block h-full rounded-full bg-[#e8762d] suave" style={{ width: `${((p.cuotas_total - p.restantes) / p.cuotas_total) * 100}%` }} />
+      </span>
+    </Link>
+  );
+}
+
 export default function DeudasPage() {
   const { data: deudas } = useSWR<Deuda[]>("/deudas");
   const { data: tarjetas } = useSWR<Tarjeta[]>("/tarjetas");
@@ -245,16 +273,27 @@ export default function DeudasPage() {
 
   const debo = deudas?.filter((d) => d.tipo !== "me_deben") ?? [];
   const meDeben = deudas?.filter((d) => d.tipo === "me_deben") ?? [];
-  const totalDebo = debo.filter((d) => d.moneda === "ARS").reduce((a, d) => a + Number(d.saldo), 0);
+  // Las compras en cuotas y el resumen de las tarjetas también son deuda
+  const planes = (tarjetas ?? []).flatMap((t) => t.planes.filter((p) => p.restantes > 0).map((p) => ({ p, tarjeta: t.nombre })));
+  const enCuotas = planes.filter(({ p }) => p.moneda === "ARS").reduce((a, { p }) => a + Number(p.monto_cuota) * p.restantes, 0);
+  const cuotaMensual = planes.filter(({ p }) => p.moneda === "ARS" && p.cuota_actual).reduce((a, { p }) => a + Number(p.monto_cuota), 0);
+  const ultimoPlan = planes.map(({ p }) => p.ultimo_periodo).sort().at(-1);
+  const resumenes = (tarjetas ?? []).map((t) => {
+    const cuotasT = t.planes.filter((p) => p.moneda === "ARS").reduce((a, p) => a + Number(p.monto_cuota) * p.restantes, 0);
+    return { t, resto: Math.max(0, Number(t.deuda) - cuotasT) };
+  }).filter((x) => x.resto > 0);
+  const deudaTarjetas = (tarjetas ?? []).reduce((a, t) => a + Number(t.deuda), 0);
+  const totalDebo = debo.filter((d) => d.moneda === "ARS").reduce((a, d) => a + Number(d.saldo), 0) + deudaTarjetas;
+  const hayAlgo = (deudas?.length ?? 0) > 0 || deudaTarjetas > 0;
   const totalMeDeben = meDeben.filter((d) => d.moneda === "ARS").reduce((a, d) => a + Number(d.saldo), 0);
 
   return (
     <div className="flex flex-col gap-7">
       <Titulo extra={<Boton variante="linea" onClick={() => setNueva(true)}><Plus size={18} /> Nueva</Boton>}>Deudas</Titulo>
 
-      {!deudas ? (
+      {!deudas || !tarjetas ? (
         <Esqueleto className="h-24" />
-      ) : deudas.length === 0 ? (
+      ) : !hayAlgo ? (
         <Vacio
           titulo="No tenés deudas cargadas"
           accion={<Boton variante="acento" onClick={() => setNueva(true)}><Plus size={18} /> Cargar una</Boton>}
@@ -263,7 +302,15 @@ export default function DeudasPage() {
         </Vacio>
       ) : (
         <div className="flex flex-wrap gap-x-12 gap-y-5">
-          <Total etiqueta="Debés" valor={totalDebo} />
+          <div className="flex max-w-md flex-col gap-2">
+            <Total etiqueta="Debés" valor={totalDebo} />
+            {enCuotas > 0 && (
+              <p className="text-sm text-muted">
+                De eso, <b className="num text-ink">{monto(Math.round(enCuotas))}</b> son compras en cuotas: pagás{" "}
+                <b className="num text-ink">{monto(Math.round(cuotaMensual))}</b> por mes{ultimoPlan && <> y la última termina en {nombrePeriodo(ultimoPlan)}</>}.
+              </p>
+            )}
+          </div>
           {meDeben.length > 0 && <Total etiqueta="Te deben" valor={totalMeDeben} tono="ok" />}
         </div>
       )}
@@ -276,6 +323,23 @@ export default function DeudasPage() {
           {debo.length > 0 && (
             <Seccion titulo="Lo que debés">
               <Lista>{debo.map((d) => <FilaDeuda key={d.id} d={d} onAbrir={() => setAbierta(d.id)} />)}</Lista>
+            </Seccion>
+          )}
+          {(planes.length > 0 || resumenes.length > 0) && (
+            <Seccion titulo="Tarjetas">
+              <Lista>
+                {planes.map(({ p, tarjeta }) => <FilaCuotas key={p.id} p={p} tarjeta={tarjeta} />)}
+                {resumenes.map(({ t, resto }) => (
+                  <Link key={t.cuenta_id} href={`/tarjetas/${t.cuenta_id}`} className="press flex items-center gap-3 bg-surface px-4 py-3.5 hover:bg-surface-2">
+                    <IconoCat icono="tarjeta_credito" color="slate" />
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate text-[15px] font-bold">{t.nombre}</span>
+                      <span className="truncate text-[13px] text-muted">Compras en un pago · próximo resumen</span>
+                    </span>
+                    <span className="num shrink-0 font-extrabold">{monto(Math.round(resto))}</span>
+                  </Link>
+                ))}
+              </Lista>
             </Seccion>
           )}
           {meDeben.length > 0 && (
