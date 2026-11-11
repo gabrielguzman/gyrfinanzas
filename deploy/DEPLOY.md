@@ -54,6 +54,11 @@ contraseña de aplicación. El archivo debe conservar permisos `600`. Nunca
 copiar sus secretos a documentación o git. SMTP fue autenticado con TLS;
 la entrega final de mensajes depende del proveedor y del destinatario.
 
+La revisión `0011` reconcilia las dos revisiones `0010` que existieron en paralelo
+(cuentas, y fijos/reglas/push). Reconoce las tablas ya presentes, preserva sus
+datos y completa lo faltante tanto en `public` como en los esquemas de usuarios.
+No hay que hacer `stamp` manual ni borrar tablas para actualizar.
+
 `alembic upgrade head` migra primero `public` y después los esquemas de usuarios
 activos. El backup completo de PostgreSQL incluye identidades y todos los
 esquemas. Para volver al acceso anterior, restaurar la configuración privada

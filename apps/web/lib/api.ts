@@ -62,6 +62,7 @@ export interface Movimiento {
   valio: boolean | null;
   deuda_id: string | null;
   cuotas: number | null;
+  fijo_id: string | null;
   garantia: { id: string; vence: string; estado: EstadoGarantia; dias_restantes: number } | null;
   creado: string;
 }
@@ -410,6 +411,70 @@ export interface Patrimonio {
   meses_esencial: string | null;
   meses_total: string | null;
   serie: { fecha: string; neto: string; estimado: boolean }[];
+}
+
+export interface Fijo {
+  id: string;
+  nombre: string;
+  clave: string;
+  monto: string;
+  dia: number;
+  activo: boolean;
+  categoria_id: string | null;
+  categoria: string | null;
+  categoria_icono: string | null;
+  categoria_color: string | null;
+  medio_pago_id: string | null;
+  medio_pago: string | null;
+  proxima: string;
+  este_mes: "pagado" | "en_bandeja" | "por_venir";
+  movimiento_id: string | null;
+}
+export interface FijoSugerido {
+  clave: string;
+  nombre: string;
+  monto: string;
+  dia: number;
+  meses: number;
+  categoria: string | null;
+}
+export interface Fijos {
+  fijos: Fijo[];
+  sugeridos: FijoSugerido[];
+  total_mensual: string;
+  pagado_mes: string;
+}
+export interface Regla {
+  id: string;
+  texto: string;
+  categoria_id: string;
+  categoria: string;
+  categoria_icono: string;
+  categoria_color: string;
+}
+export interface PreviaRegla {
+  texto: string;
+  total: number;
+  a_cambiar: number;
+  ejemplos: string[];
+}
+export interface SugerenciaRegla {
+  texto: string | null;
+  total: number;
+  a_cambiar: number;
+  existe: boolean;
+}
+export interface PrefsAvisos {
+  notif_hoy: boolean;
+  notif_fijos: boolean;
+  notif_vencimientos: boolean;
+  notif_avisos: boolean;
+  notif_hora: string;
+}
+export interface EstadoAvisos {
+  clave_publica: string;
+  dispositivos: number;
+  preferencias: PrefsAvisos;
 }
 
 export function apiBase(): string {

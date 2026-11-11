@@ -210,3 +210,22 @@ def test_registro_correo_fallido_validacion_y_limites(multi,monkeypatch):
     monkeypatch.setattr(mailer,'enviar',lambda *args:None)
     for _ in range(2): assert c.post('/auth/registro',json={'email':'nuevo@example.com'}).status_code==200
     assert c.post('/auth/registro',json={'email':'nuevo@example.com'}).status_code==429
+
+
+def test_fijos_programados_y_exportacion_separados_por_usuario(multi):
+    from app.main import _pasada
+    from app.models import GastoFijo
+    c,factory,e=multi
+    token=invite(c)
+    assert c.post('/auth/aceptar',json={'token':token,'nombre':'Nuevo','password':PASS}).status_code==200
+    with factory() as d:
+        schema=d.scalar(select(Usuario.esquema).where(Usuario.email=='nuevo@example.com'))
+        d.add(GastoFijo(nombre='Fijo del propietario',clave='mismo-nombre',monto=100,dia=1));d.commit()
+    with factory(bind=e.execution_options(schema_translate_map={None:schema})) as d:
+        d.add(GastoFijo(nombre='Fijo privado',clave='mismo-nombre',monto=200,dia=1));d.commit()
+    _pasada()
+    assert [m['descripcion'] for m in c.get('/movimientos').json()]==['Fijo del propietario']
+    export=c.get('/exportar?formato=csv');assert export.status_code==200 and 'Fijo privado' not in export.text
+    signin(c)
+    assert [m['descripcion'] for m in c.get('/movimientos').json()]==['Fijo privado']
+    export=c.get('/exportar?formato=csv');assert export.status_code==200 and 'Fijo del propietario' not in export.text

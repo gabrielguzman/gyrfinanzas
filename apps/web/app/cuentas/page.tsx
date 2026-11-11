@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import useSWR from "swr";
-import { ArrowLeftRight, Plus, Goal, Landmark } from "lucide-react";
+import { ArrowLeftRight, Plus, Goal, Landmark, Repeat, Settings } from "lucide-react";
 import { COLOR_CUENTA, NuevaCuentaSheet, NuevoMedioSheet, TransferenciaSheet } from "@/components/CuentaForms";
 import { useContador } from "@/lib/hooks";
 import { Salir } from "@/components/Shell";
@@ -47,6 +47,14 @@ export default function CuentasPage() {
         <Link href="/metas" className="press flex items-center gap-3 rounded-[20px] bg-surface p-3.5 shadow-soft">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-ok-soft text-ok"><Goal size={19} /></span>
           <span className="flex min-w-0 flex-col"><span className="text-sm font-bold">Metas</span><span className="truncate text-xs text-muted">Lo que estás juntando</span></span>
+        </Link>
+        <Link href="/fijos" className="press flex items-center gap-3 rounded-[20px] bg-surface p-3.5 shadow-soft">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-warn-soft text-warn-ink"><Repeat size={19} /></span>
+          <span className="flex min-w-0 flex-col"><span className="text-sm font-bold">Gastos fijos</span><span className="truncate text-xs text-muted">Alquiler, servicios</span></span>
+        </Link>
+        <Link href="/ajustes" className="press flex items-center gap-3 rounded-[20px] bg-surface p-3.5 shadow-soft">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-surface-2 text-muted"><Settings size={19} /></span>
+          <span className="flex min-w-0 flex-col"><span className="text-sm font-bold">Ajustes</span><span className="truncate text-xs text-muted">Avisos, reglas, exportar</span></span>
         </Link>
       </div>
 

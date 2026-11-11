@@ -1,13 +1,28 @@
 "use client";
 
-import { ArrowLeftRight, Paperclip } from "lucide-react";
+import { useRef } from "react";
+import { ArrowLeftRight, Check, Paperclip } from "lucide-react";
 import type { Movimiento } from "@/lib/api";
 import { monto } from "@/lib/format";
 import { useApp } from "./Shell";
 import { IconoCat, cx } from "./ui";
 
-export function MovimientoFila({ mov }: { mov: Movimiento }) {
+export function MovimientoFila({
+  mov,
+  eligiendo,
+  elegido,
+  onElegir,
+}: {
+  mov: Movimiento;
+  /** Modo selección: tocar elige en vez de abrir. */
+  eligiendo?: boolean;
+  elegido?: boolean;
+  /** Alternar selección (también se llama con un toque largo para entrar al modo). */
+  onElegir?: () => void;
+}) {
   const { abrirMovimiento } = useApp();
+  const largo = useRef<number | undefined>(undefined);
+  const disparado = useRef(false);
   const ingreso = mov.tipo === "ingreso";
   const transfer = mov.tipo === "transferencia";
   const sub = transfer
@@ -16,10 +31,28 @@ export function MovimientoFila({ mov }: { mov: Movimiento }) {
 
   return (
     <button
-      onClick={() => abrirMovimiento(mov.id)}
-      className="press flex min-h-[64px] w-full items-center gap-3 bg-surface px-4 py-2.5 text-left hover:bg-surface-2"
+      onClick={() => {
+        if (disparado.current) return void (disparado.current = false);
+        if (eligiendo && onElegir) onElegir();
+        else abrirMovimiento(mov.id);
+      }}
+      onPointerDown={() => {
+        if (!onElegir || eligiendo) return;
+        disparado.current = false;
+        largo.current = window.setTimeout(() => { disparado.current = true; onElegir(); }, 480);
+      }}
+      onPointerUp={() => window.clearTimeout(largo.current)}
+      onPointerLeave={() => window.clearTimeout(largo.current)}
+      onPointerMove={(e) => { if (Math.abs(e.movementY) > 2) window.clearTimeout(largo.current); }}
+      onContextMenu={(e) => onElegir && e.preventDefault()}
+      aria-pressed={eligiendo ? !!elegido : undefined}
+      className={cx("press flex min-h-[64px] w-full items-center gap-3 px-4 py-2.5 text-left select-none", elegido ? "bg-accent-soft" : "bg-surface hover:bg-surface-2")}
     >
-      {transfer ? (
+      {eligiendo ? (
+        <span className={cx("flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2", elegido ? "border-accent bg-accent text-accent-ink" : "border-line-strong")} aria-hidden>
+          {elegido && <Check size={20} strokeWidth={3} />}
+        </span>
+      ) : transfer ? (
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-surface-2 text-muted" aria-hidden>
           <ArrowLeftRight size={19} />
         </span>

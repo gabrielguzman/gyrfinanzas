@@ -9,6 +9,8 @@ from app.config import settings
 from app.db import Base, get_db
 from app.main import app
 
+settings.avisos_activos = False  # en los tests no corre el programador
+
 
 @pytest.fixture()
 def client(tmp_path):

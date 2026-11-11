@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from: str = ""
+    # Programador interno: fijos del día y notificaciones push
+    avisos_activos: bool = True
 
 
 settings = Settings()
