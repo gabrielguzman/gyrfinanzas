@@ -82,6 +82,7 @@ class OrigenMovimiento(str, enum.Enum):
     pdf = "pdf"
     voz = "voz"
     telegram = "telegram"
+    fijo = "fijo"  # lo generó un gasto fijo el día que tocaba
 
 
 class RolAdjunto(str, enum.Enum):
@@ -163,6 +164,8 @@ class Movimiento(Base):
     valio: Mapped[bool | None] = mapped_column(Boolean)
     # Pago, cobro o préstamo asociado a una deuda.
     deuda_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("deuda.id", ondelete="SET NULL"), index=True)
+    # Pago de un gasto fijo (alquiler, internet, una suscripción)
+    fijo_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("gasto_fijo.id", ondelete="SET NULL"), index=True)
 
     categoria_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categoria.id", ondelete="SET NULL"))
     medio_pago_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("medio_pago.id", ondelete="SET NULL"))
@@ -454,3 +457,57 @@ class FotoPatrimonio(Base):
     neto_ars: Mapped[Decimal] = mapped_column(Numeric(16, 2))
     neto_usd: Mapped[Decimal | None] = mapped_column(Numeric(16, 2))
     cotizacion: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+
+
+class GastoFijo(Base):
+    """Algo que pagás todos los meses. Activo: el día que toca aparece en la bandeja para
+    confirmar. Inactivo: le dijiste que no es un fijo (no se sugiere ni cuenta en el plan)."""
+    __tablename__ = "gasto_fijo"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    nombre: Mapped[str] = mapped_column(String(120))
+    # Descripción normalizada con la que se reconocen sus pagos (ver detectores.clave_desc)
+    clave: Mapped[str] = mapped_column(String(160), unique=True)
+    monto: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
+    dia: Mapped[int] = mapped_column(Integer, default=1)
+    categoria_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categoria.id", ondelete="SET NULL"))
+    medio_pago_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("medio_pago.id", ondelete="SET NULL"))
+    activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Último mes (AAAA-MM) ya resuelto: generado, o pagado por su cuenta
+    ultimo_periodo: Mapped[str | None] = mapped_column(String(7))
+    creado: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    categoria: Mapped[Categoria | None] = relationship()
+    medio_pago: Mapped[MedioPago | None] = relationship()
+
+
+class ReglaCategoria(Base):
+    """«Todo lo que diga Uber va a Transporte». Gana sobre las palabras de la categoría."""
+    __tablename__ = "regla_categoria"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    texto: Mapped[str] = mapped_column(String(80), unique=True)  # normalizado (sin tildes, minúsculas)
+    categoria_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("categoria.id", ondelete="CASCADE"))
+    creado: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    categoria: Mapped[Categoria] = relationship()
+
+
+class PushSuscripcion(Base):
+    """Un navegador o celular que acepta notificaciones (Web Push)."""
+    __tablename__ = "push_suscripcion"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    endpoint: Mapped[str] = mapped_column(String(1000), unique=True)
+    p256dh: Mapped[str] = mapped_column(String(200))
+    auth: Mapped[str] = mapped_column(String(100))
+    dispositivo: Mapped[str] = mapped_column(String(120), default="")
+    creado: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class AvisoEnviado(Base):
+    """Notificaciones ya mandadas, para no repetirlas (la clave incluye el día o el dato)."""
+    __tablename__ = "aviso_enviado"
+
+    clave: Mapped[str] = mapped_column(String(200), primary_key=True)
+    creado: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

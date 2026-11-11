@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.services import fijos as svc_fijos
 from app.db import get_db
 from app.models import (
     Archivo,
@@ -55,7 +56,7 @@ def serializar(m: Movimiento) -> MovimientoOut:
         cuenta_destino_id=m.cuenta_destino_id,
         cuenta_destino=m.cuenta_destino.nombre if m.cuenta_destino else None,
         adjuntos=adjuntos, tiene_comprobante=bool(adjuntos), valio=m.valio, deuda_id=m.deuda_id, creado=m.creado,
-        cuotas=m.cuotas,
+        cuotas=m.cuotas, fijo_id=m.fijo_id,
     )
 
 
@@ -80,6 +81,8 @@ def listar(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
+    if estado == EstadoMovimiento.pendiente:
+        svc_fijos.generar(db)  # los fijos que tocan hoy entran a la bandeja
     consulta = select(Movimiento).options(*_CARGAS)
     if estado:
         consulta = consulta.where(Movimiento.estado == estado)
@@ -107,12 +110,19 @@ def listar(
 @router.post("", response_model=MovimientoOut, status_code=201)
 def crear(datos: MovimientoIn, db: Session = Depends(get_db)):
     mov = Movimiento(**datos.model_dump())
+    if mov.categoria_id is None and mov.tipo != TipoMovimiento.transferencia and not mov.deuda_id:
+        from app.services.reglas import categoria_para
+        if cat := categoria_para(db, mov.descripcion, tipo=mov.tipo):
+            mov.categoria_id = cat.id
     if mov.cuotas == 1:
         mov.cuotas = None
     resolver(db, mov, confirmar=mov.estado == EstadoMovimiento.confirmado)
     db.add(mov)
+    db.flush()
+    svc_fijos.absorber(db, mov)
     if mov.estado == EstadoMovimiento.confirmado:
         plan_desde_movimiento(db, mov)  # compra en cuotas con tarjeta → su plan
+        svc_fijos.al_confirmar(db, mov)
     db.commit()
     return serializar(_cargar(db, mov.id))
 

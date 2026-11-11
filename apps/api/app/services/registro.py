@@ -64,6 +64,9 @@ def interpretar_texto(db: Session, texto: str) -> Resultado:
     medios = list(db.scalars(select(MedioPago)))
     categorias = list(db.scalars(select(Categoria)))
     r = interpretar(texto, medios, categorias)
+    from app.services.reglas import categoria_para
+    if r.deuda is None and (cat := categoria_para(db, texto, r.descripcion, tipo=r.tipo)):
+        r.categoria = cat  # tus reglas mandan
     _aprender(db, r)
     _revisar_cuotas(r, medios, texto)
     return r
@@ -145,6 +148,8 @@ def crear_desde_texto(db: Session, texto: str, origen: OrigenMovimiento) -> tupl
     )
     db.add(mov)
     db.flush()
+    from app.services.fijos import absorber
+    absorber(db, mov)
     if r.garantia_meses:
         from app.services.garantias import nueva, producto_de
         nueva(db, producto=producto_de(mov), fecha_compra=mov.fecha, meses=r.garantia_meses, movimiento=mov)
@@ -193,6 +198,8 @@ def confirmar(db: Session, mov: Movimiento) -> None:
     resolver(db, mov, confirmar=True)
     mov.estado = EstadoMovimiento.confirmado
     plan_desde_movimiento(db, mov)
+    from app.services.fijos import al_confirmar
+    al_confirmar(db, mov)
 
 
 def vincular(db: Session, mov: Movimiento, archivo: Archivo, rol: RolAdjunto) -> None:

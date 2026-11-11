@@ -64,9 +64,39 @@ class Recurrente:
     categoria: str | None
     ultima: date | None = None      # fecha del último pago
     con_tarjeta: bool = False       # se paga con tarjeta de crédito (va al resumen)
+    fijo_id: str | None = None      # si lo tenés configurado como gasto fijo
 
 
 def recurrentes(db: Session, hoy: date) -> list[Recurrente]:
+    """Tus gastos fijos: los que configuraste más los detectados que no descartaste."""
+    from app.models import GastoFijo, MedioPago
+    from app.services.fijos import dia_en
+    fijos = {f.clave: f for f in db.scalars(select(GastoFijo))}
+    salida = []
+    for r in recurrentes_detectados(db, hoy):
+        f = fijos.pop(r.clave, None)
+        if f is not None and not f.activo:
+            continue  # le dijiste que no es fijo
+        if f is not None:
+            r.nombre, r.fijo_id = f.nombre, str(f.id)
+            if f.monto > 0:
+                r.ultimo = f.monto
+        salida.append(r)
+    for f in fijos.values():
+        if not f.activo or f.monto <= 0:
+            continue
+        ultima = dia_en(hoy.year, hoy.month, f.dia)
+        if ultima > hoy:
+            a, m = (hoy.year - 1, 12) if hoy.month == 1 else (hoy.year, hoy.month - 1)
+            ultima = dia_en(a, m, f.dia)
+        medio = db.get(MedioPago, f.medio_pago_id) if f.medio_pago_id else None
+        salida.append(Recurrente(
+            f.clave, f.nombre, f.monto, None, 0, f.categoria.nombre if f.categoria else None, ultima=ultima,
+            con_tarjeta=bool(medio and medio.cuenta.tipo == TipoCuenta.tarjeta_credito), fijo_id=str(f.id)))
+    return sorted(salida, key=lambda r: -r.ultimo)
+
+
+def recurrentes_detectados(db: Session, hoy: date) -> list[Recurrente]:
     """Lo que se repite una vez por mes con montos parecidos (suscripciones, servicios, alquiler)."""
     movs = gastos(db, hoy - timedelta(days=125), hoy)
     por_clave: dict[str, list[Movimiento]] = defaultdict(list)
@@ -224,6 +254,35 @@ def _desvios(db: Session, hoy: date) -> list[Hallazgo]:
     return sorted(out, key=lambda h: -(h.monto or 0))[:2]
 
 
+def _fijos_atrasados(db: Session, hoy: date) -> list[Hallazgo]:
+    from app.services.fijos import atrasados
+    out = []
+    for m in atrasados(db, hoy):
+        dias = (hoy - m.fecha).days
+        out.append(Hallazgo(
+            clave=f"fijo_atrasado:{m.id}", tipo="fijo_atrasado", tono="aviso", orden=7,
+            titulo=f"{m.descripcion}: ¿ya lo pagaste?",
+            detalle=f"Tocaba el {m.fecha:%d/%m} (hace {dias} días) y sigue en la bandeja. "
+                    f"Si lo pagaste, confirmalo; si este mes no va, borralo.",
+            monto=m.monto, accion={"tipo": "movimiento", "valor": str(m.id)},
+        ))
+    return out
+
+
+def _fijos_sugeridos(db: Session, hoy: date) -> list[Hallazgo]:
+    from app.services.fijos import sugeridos
+    sug = sugeridos(db, hoy)
+    if not sug:
+        return []
+    nombres = ", ".join(s.nombre for s in sug[:3]) + (" y más" if len(sug) > 3 else "")
+    return [Hallazgo(
+        clave=f"fijos_sugeridos:{','.join(sorted(s.clave for s in sug))}"[:200], tipo="fijos_sugeridos", tono="info", orden=40,
+        titulo=f"{len(sug)} {'gasto parece fijo' if len(sug) == 1 else 'gastos parecen fijos'}",
+        detalle=f"{nombres}. Activalos y el día que tocan te aparecen en la bandeja para confirmar con un toque.",
+        monto=sum((s.monto for s in sug), CERO), accion={"tipo": "link", "valor": "/fijos"},
+    )]
+
+
 def _garantias(db: Session, hoy: date) -> list[Hallazgo]:
     from app.services import garantias as svc_g
     out = []
@@ -322,7 +381,7 @@ def hallazgos(db: Session, hoy: date | None = None, incluir_descartados: bool = 
     hoy = hoy or date.today()
     ult30 = gastos(db, hoy - timedelta(days=30), hoy)
     rec = recurrentes(db, hoy)
-    todos = (_duplicados(ult30) + _garantias(db, hoy) + _aumentos(rec) + _plata_tirada(ult30, hoy)
+    todos = (_duplicados(ult30) + _fijos_atrasados(db, hoy) + _fijos_sugeridos(db, hoy) + _garantias(db, hoy) + _aumentos(rec) + _plata_tirada(ult30, hoy)
              + _hormiga(ult30, hoy) + _desvios(db, hoy) + _sin_garantia(gastos(db, hoy - timedelta(days=30), hoy, incluir_cuotas=True)) + _fijos(rec)
              + _metas(db, hoy) + _inversiones(db, hoy))
     if not incluir_descartados:

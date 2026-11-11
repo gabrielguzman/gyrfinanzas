@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { CalendarRange, FileText, HandCoins, Home, List, Monitor, Moon, Goal, Landmark, LogOut, Plus, ShieldCheck, ShoppingBag, Sun, Target, Wallet } from "lucide-react";
+import { CalendarRange, FileText, HandCoins, Home, List, Monitor, Moon, Goal, Landmark, LogOut, Plus, Repeat, Settings, ShieldCheck, ShoppingBag, Sun, Target, Wallet } from "lucide-react";
 import { SWRConfig, useSWRConfig } from "swr";
 import { fetcher } from "@/lib/api";
 import { vaciarCola } from "@/lib/cola";
@@ -17,13 +17,16 @@ interface Aviso {
   id: number;
   texto: string;
   deshacer?: () => unknown;
+  /** Un botón con otra acción (ej. «Sí, siempre» para crear una regla). */
+  accion?: { texto: string; fn: () => unknown };
 }
+type OpcionesAviso = { deshacer?: () => unknown; accion?: { texto: string; fn: () => unknown } };
 interface Ctx {
   abrirCaptura: () => void;
   abrirMovimiento: (id: string) => void;
   /** Abre una garantía por id, o el alta (opcionalmente desde un gasto). */
   abrirGarantia: (g: { id: string } | { nueva: true; movimiento?: string }) => void;
-  aviso: (texto: string, opciones?: { deshacer?: () => unknown }) => void;
+  aviso: (texto: string, opciones?: OpcionesAviso) => void;
   refrescar: () => void;
 }
 const AppCtx = createContext<Ctx | null>(null);
@@ -46,11 +49,13 @@ const NAV = [
   { href: "/semana", label: "Tu semana", Icon: CalendarRange },
   { href: "/comprobantes", label: "Comprobantes", Icon: FileText },
   { href: "/garantias", label: "Garantías", Icon: ShieldCheck },
+  { href: "/fijos", label: "Gastos fijos", Icon: Repeat },
+  { href: "/ajustes", label: "Ajustes", Icon: Settings },
 ] as const;
 // En el celu entran cuatro: Comprobantes y Garantías se abren desde Movimientos, Tu semana desde Inicio.
 // El plan se abre desde la tarjeta «Hoy podés gastar» de Inicio.
 // Metas y Patrimonio, desde Cuentas e Inicio.
-const NAV_CELU = NAV.filter((n) => !["/comprobantes", "/semana", "/garantias", "/plan", "/metas", "/patrimonio", "/comprar"].includes(n.href));
+const NAV_CELU = NAV.filter((n) => !["/comprobantes", "/semana", "/garantias", "/plan", "/metas", "/patrimonio", "/comprar", "/fijos", "/ajustes"].includes(n.href));
 
 function activa(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -101,11 +106,12 @@ function Interior({ children }: { children: ReactNode }) {
     mutate(() => true);
   }, [mutate]);
 
-  const aviso = useCallback((texto: string, opciones?: { deshacer?: () => unknown }) => {
+  const aviso = useCallback((texto: string, opciones?: OpcionesAviso) => {
     window.clearTimeout(timer.current);
-    const nuevo = { id: Date.now(), texto, deshacer: opciones?.deshacer };
+    const nuevo = { id: Date.now(), texto, deshacer: opciones?.deshacer, accion: opciones?.accion };
     setToast(nuevo);
-    timer.current = window.setTimeout(() => setToast((t) => (t?.id === nuevo.id ? null : t)), opciones?.deshacer ? 5000 : 2800);
+    const ms = opciones?.accion ? 9000 : opciones?.deshacer ? 5000 : 2800;
+    timer.current = window.setTimeout(() => setToast((t) => (t?.id === nuevo.id ? null : t)), ms);
   }, []);
 
   useEffect(() => {
@@ -211,8 +217,21 @@ function Interior({ children }: { children: ReactNode }) {
 
       {toast && (
         <div key={toast.id} className="anim-aparecer fixed inset-x-0 bottom-24 z-[60] flex justify-center px-5 lg:bottom-8" role="status">
-          <div className="flex items-center gap-4 rounded-2xl bg-ink py-2.5 pr-2.5 pl-4 text-sm font-semibold text-ground shadow-soft">
+          <div className="flex max-w-lg items-center gap-4 rounded-2xl bg-ink py-2.5 pr-2.5 pl-4 text-sm font-semibold text-ground shadow-soft">
             <span>{toast.texto}</span>
+            {toast.accion && (
+              <button
+                onClick={async () => {
+                  const a = toast.accion!;
+                  setToast(null);
+                  await a.fn();
+                  refrescar();
+                }}
+                className="press min-h-9 shrink-0 rounded-xl bg-accent px-3 font-bold text-accent-ink"
+              >
+                {toast.accion.texto}
+              </button>
+            )}
             {toast.deshacer && (
               <button
                 onClick={async () => {

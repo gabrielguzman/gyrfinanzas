@@ -191,7 +191,7 @@ def _variables(db: Session, desde: date, hasta: date, fijas: set[str]) -> list[M
     movs = db.scalars(select(Movimiento).where(
         Movimiento.tipo == TipoMovimiento.gasto, Movimiento.moneda == Moneda.ARS,
         Movimiento.deuda_id.is_(None), Movimiento.fecha.between(desde, hasta)))
-    return [m for m in movs if not (m.cuotas and m.cuotas > 1) and clave_desc(m.descripcion) not in fijas]
+    return [m for m in movs if not (m.cuotas and m.cuotas > 1) and m.fijo_id is None and clave_desc(m.descripcion) not in fijas]
 
 
 def calcular(db: Session, hoy: date | None = None) -> Plan:

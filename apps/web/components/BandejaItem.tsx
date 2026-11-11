@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { Check, Paperclip, Trash2 } from "lucide-react";
 import { api, ApiError, type Movimiento } from "@/lib/api";
-import { monto } from "@/lib/format";
+import { fechaCorta, hoyISO, monto } from "@/lib/format";
 import { vibrar } from "@/lib/hooks";
 import { AdjuntarBoton } from "./AdjuntarBoton";
 import { MedioChips } from "./Selectores";
@@ -141,7 +141,9 @@ export function BandejaItem({ mov }: { mov: Movimiento }) {
               </span>
             </div>
             <span className="truncate text-[13px] text-muted">
-              {mov.texto_original ? `${ORIGEN[mov.origen] ?? "Cargado"}: «${mov.texto_original}»` : mov.categoria ?? "Sin categoría"}
+              {mov.origen === "fijo"
+                ? `Gasto fijo · ${mov.fecha === hoyISO() ? "toca hoy" : `tocaba el ${fechaCorta(mov.fecha)}`}`
+                : mov.texto_original ? `${ORIGEN[mov.origen] ?? "Cargado"}: «${mov.texto_original}»` : mov.categoria ?? "Sin categoría"}
             </span>
           </div>
         </div>

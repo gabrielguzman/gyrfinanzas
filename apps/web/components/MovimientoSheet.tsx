@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { ArrowLeftRight, ChevronRight, ExternalLink, ShieldPlus, Trash2, X } from "lucide-react";
-import { api, ApiError, type MedioPago, type Movimiento } from "@/lib/api";
+import { api, ApiError, type Categoria, type MedioPago, type Movimiento } from "@/lib/api";
+import { ofrecerRegla } from "@/lib/reglas";
 import { monto } from "@/lib/format";
 import { vibrar } from "@/lib/hooks";
 import { AdjuntarBoton } from "./AdjuntarBoton";
@@ -25,6 +26,7 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
   const [medio, setMedio] = useState<string | null>(null);
   const [cuotas, setCuotas] = useState<number | null>(null);
   const { data: medios } = useSWR<MedioPago[]>(id ? "/medios-pago" : null);
+  const { data: categorias } = useSWR<Categoria[]>(id ? "/categorias" : null);
   const [error, setError] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
@@ -58,11 +60,15 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
   async function correr(fn: () => Promise<unknown>, ok?: string) {
     setOcupado(true);
     setError(null);
+    const nuevaCat = typeof cambios.categoria_id === "string" ? cambios.categoria_id : null;
     try {
       await fn();
       await mutate();
       refrescar();
       if (ok) aviso(ok);
+      // Le cambiaste la categoría: ¿la hacemos regla?
+      const nombre = categorias?.find((c) => c.id === nuevaCat)?.nombre;
+      if (mov && nuevaCat && nombre) window.setTimeout(() => ofrecerRegla(mov.id, nuevaCat, nombre, aviso), 900);
       return true;
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "No pude conectar con el servidor");

@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     secret_key: str = ""          # para firmar la sesión; obligatoria si hay contraseña
     cookie_secure: bool = False   # True detrás de HTTPS
     sesion_dias: int = 90
+    # Programador interno: fijos del día y notificaciones push
+    avisos_activos: bool = True
 
 
 settings = Settings()

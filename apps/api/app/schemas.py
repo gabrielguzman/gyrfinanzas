@@ -180,6 +180,7 @@ class MovimientoOut(BaseModel):
     valio: bool | None = None
     deuda_id: uuid.UUID | None = None
     cuotas: int | None = None
+    fijo_id: uuid.UUID | None = None
     garantia: "GarantiaMini | None" = None
     creado: datetime
 
@@ -877,3 +878,61 @@ class SimulacionOut(BaseModel):
 
 
 MovimientoOut.model_rebuild()
+
+
+# ---------- Gastos fijos ----------
+class FijoOut(BaseModel):
+    id: uuid.UUID
+    nombre: str
+    clave: str
+    monto: Decimal
+    dia: int
+    activo: bool
+    categoria_id: uuid.UUID | None
+    categoria: str | None
+    categoria_icono: str | None
+    categoria_color: str | None
+    medio_pago_id: uuid.UUID | None
+    medio_pago: str | None
+    proxima: date
+    # Este mes: pagado (confirmado) | en_bandeja (generado, sin confirmar) | por_venir
+    este_mes: Literal["pagado", "en_bandeja", "por_venir"]
+    movimiento_id: uuid.UUID | None
+
+
+class FijoSugerido(BaseModel):
+    clave: str
+    nombre: str
+    monto: Decimal
+    dia: int
+    meses: int
+    categoria: str | None
+
+
+class FijosOut(BaseModel):
+    fijos: list[FijoOut]
+    sugeridos: list[FijoSugerido]
+    total_mensual: Decimal
+    pagado_mes: Decimal
+
+
+class FijoIn(BaseModel):
+    nombre: str = Field(min_length=1, max_length=120)
+    monto: Decimal = Field(gt=0)
+    dia: int = Field(ge=1, le=31)
+    categoria_id: uuid.UUID | None = None
+    medio_pago_id: uuid.UUID | None = None
+
+
+class FijoPatch(BaseModel):
+    nombre: str | None = Field(default=None, min_length=1, max_length=120)
+    monto: Decimal | None = Field(default=None, gt=0)
+    dia: int | None = Field(default=None, ge=1, le=31)
+    categoria_id: uuid.UUID | None = None
+    medio_pago_id: uuid.UUID | None = None
+    activo: bool | None = None
+
+
+class FijoDecision(BaseModel):
+    clave: str = Field(min_length=1, max_length=160)
+    activo: bool = True  # False: «no es un fijo»
