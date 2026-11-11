@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { ArrowLeftRight, Plus, Goal, Landmark } from "lucide-react";
 import { COLOR_CUENTA, NuevaCuentaSheet, NuevoMedioSheet, TransferenciaSheet } from "@/components/CuentaForms";
 import { useContador } from "@/lib/hooks";
+import { Salir } from "@/components/Shell";
 import { Boton, Esqueleto, IconoCat, Lista, Seccion, Titulo, Vacio } from "@/components/ui";
 import type { Cuenta, Inicio, MedioPago } from "@/lib/api";
 import { monto, TIPO_CUENTA, TIPO_MEDIO } from "@/lib/format";
@@ -150,6 +151,7 @@ export default function CuentasPage() {
       <NuevaCuentaSheet abierto={nuevaCuenta} onCerrar={() => setNuevaCuenta(false)} />
       <NuevoMedioSheet abierto={nuevoMedio} onCerrar={() => setNuevoMedio(false)} />
       <TransferenciaSheet key={transfer.destino ?? "libre"} abierto={transfer.abierto} destinoInicial={transfer.destino} onCerrar={() => setTransfer({ abierto: false })} />
+      <div className="lg:hidden"><Salir /></div>
     </div>
   );
 }

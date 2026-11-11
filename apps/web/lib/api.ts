@@ -422,7 +422,10 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${apiBase()}${path}`, init);
+  const res = await fetch(`${apiBase()}${path}`, { credentials: "same-origin", ...init });
+  if (res.status === 401 && !path.startsWith("/auth") && typeof window !== "undefined" && window.location.pathname !== "/entrar") {
+    window.location.href = `/entrar?volver=${encodeURIComponent(window.location.pathname)}`;
+  }
   if (!res.ok) {
     let detalle = `Error ${res.status}`;
     try {

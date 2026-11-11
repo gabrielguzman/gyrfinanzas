@@ -20,3 +20,8 @@ apps/api/uploads-demo/
 # Herramientas
 tsconfig.tsbuildinfo
 *.log
+
+# Producción
+deploy/.env
+deploy/backups/*
+!deploy/backups/.gitkeep

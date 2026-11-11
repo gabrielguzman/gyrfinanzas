@@ -1,10 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app import auth
 from app.config import settings
 from app.routers import archivos, captura, categorias, cuentas, inicio, medios_pago, movimientos, resumen, semana, tarjetas, deudas, garantias, plan, metas, patrimonio, compra
 
-app = FastAPI(title="gyrfinanzas API", version="0.1.0")
+# Con login activo, la documentación interactiva no queda pública
+app = FastAPI(title="gyrfinanzas API", version="0.1.0",
+              docs_url=None if settings.app_password_hash else "/docs", redoc_url=None, openapi_url=None if settings.app_password_hash else "/openapi.json")
+app.middleware("http")(auth.middleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -13,6 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 for r in (inicio, resumen, captura, movimientos, cuentas, medios_pago, categorias, archivos, tarjetas, deudas, semana, garantias, plan, metas, patrimonio, compra):
     app.include_router(r.router)
 

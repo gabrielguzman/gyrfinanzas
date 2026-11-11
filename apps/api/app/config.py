@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     # Lectura de resúmenes con IA (opcional). Sin clave se usan reglas.
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-5-5"
+    # Login (producción). Sin hash, la app queda abierta (uso local en tu red).
+    # Generar el hash: python -m app.auth "tu contraseña"
+    app_password_hash: str = ""
+    secret_key: str = ""          # para firmar la sesión; obligatoria si hay contraseña
+    cookie_secure: bool = False   # True detrás de HTTPS
+    sesion_dias: int = 90
 
 
 settings = Settings()

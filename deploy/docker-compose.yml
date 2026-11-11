@@ -1,0 +1,107 @@
+# gyrfinanzas en producción. Todo queda aislado: proyecto, red y volúmenes propios.
+# La web escucha SOLO en 127.0.0.1:${WEB_PORT}; tu proxy (nginx, Caddy, Traefik…) publica el dominio.
+name: gyrfinanzas
+
+x-api: &api
+  image: ${API_IMAGE:-ghcr.io/gabrielguzman/gyrfinanzas-api:latest}
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql+psycopg://gyr:${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en deploy/.env}@db:5432/gyrfinanzas
+    UPLOAD_DIR: /data/uploads
+    COOKIE_SECURE: ${COOKIE_SECURE:-true}
+    TZ: ${TZ:-America/Argentina/Catamarca}
+  volumes:
+    - uploads:/data/uploads
+  networks: [interna]
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: gyr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en deploy/.env}
+      POSTGRES_DB: gyrfinanzas
+      TZ: ${TZ:-America/Argentina/Catamarca}
+    volumes:
+      - db:/var/lib/postgresql/data
+    networks: [interna]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gyr -d gyrfinanzas"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { memory: 384m }
+
+  api:
+    <<: *api
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/salud', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { memory: 384m }
+
+  # El bot de Telegram solo corre si en .env ponés COMPOSE_PROFILES=bot (y TELEGRAM_TOKEN).
+  bot:
+    <<: *api
+    command: ["python", "-m", "app.bot"]
+    profiles: [bot]
+    depends_on:
+      api: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { memory: 256m }
+
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/gabrielguzman/gyrfinanzas-web:latest}
+    environment:
+      TZ: ${TZ:-America/Argentina/Catamarca}
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3410}:3000"
+    depends_on:
+      api: { condition: service_healthy }
+    networks: [interna]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { memory: 384m }
+
+  # Backup diario de la base y los comprobantes en deploy/backups (se guardan BACKUP_DIAS días).
+  backup:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: db
+      PGUSER: gyr
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en deploy/.env}
+      PGDATABASE: gyrfinanzas
+      BACKUP_HORA: ${BACKUP_HORA:-04}
+      BACKUP_DIAS: ${BACKUP_DIAS:-14}
+      TZ: ${TZ:-America/Argentina/Catamarca}
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - ./backups:/backups
+      - uploads:/uploads:ro
+    entrypoint: ["sh", "/backup.sh"]
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [interna]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { memory: 128m }
+
+volumes:
+  db:
+  uploads:
+
+networks:
+  interna:

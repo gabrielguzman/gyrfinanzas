@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { CalendarRange, FileText, HandCoins, Home, List, Monitor, Moon, Goal, Landmark, Plus, ShieldCheck, ShoppingBag, Sun, Target, Wallet } from "lucide-react";
+import { CalendarRange, FileText, HandCoins, Home, List, Monitor, Moon, Goal, Landmark, LogOut, Plus, ShieldCheck, ShoppingBag, Sun, Target, Wallet } from "lucide-react";
 import { SWRConfig, useSWRConfig } from "swr";
 import { fetcher } from "@/lib/api";
 import { vaciarCola } from "@/lib/cola";
@@ -174,7 +174,8 @@ function Interior({ children }: { children: ReactNode }) {
               </Link>
             ))}
           </nav>
-          <div className="mt-auto flex items-center justify-between gap-2 px-2">
+          <div className="mt-auto"><Salir /></div>
+          <div className="flex items-center justify-between gap-2 px-2">
             <span className="text-xs font-semibold text-faint">Tema</span>
             <SelectorTema compacto />
           </div>
@@ -247,10 +248,27 @@ function TabLink({ href, label, activo, Icon }: { href: string; label: string; a
 
 export { SelectorTema };
 
+export function Salir() {
+  const [requiere, setRequiere] = useState(false);
+  useEffect(() => {
+    fetch("/api/auth/estado").then((r) => r.json()).then((e) => setRequiere(!!e.requiere)).catch(() => {});
+  }, []);
+  if (!requiere) return null;
+  return (
+    <button
+      onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/entrar"; }}
+      className="press flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-bold text-muted hover:bg-surface-2"
+    >
+      <LogOut size={17} /> Salir
+    </button>
+  );
+}
+
 export function Shell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   return (
     <SWRConfig value={{ fetcher, revalidateOnFocus: true }}>
-      <Interior>{children}</Interior>
+      {pathname === "/entrar" ? children : <Interior>{children}</Interior>}
     </SWRConfig>
   );
 }

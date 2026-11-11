@@ -6,6 +6,8 @@ const API_URL = process.env.API_URL || `http://127.0.0.1:${process.env.API_PORT 
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // En la imagen de Docker se compila «standalone» (servidor mínimo, sin node_modules completos).
+  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
   // La demo usa otra carpeta de compilación para poder correr junto a la app real.
   distDir: process.env.NEXT_DIST_DIR || ".next",
   async rewrites() {
