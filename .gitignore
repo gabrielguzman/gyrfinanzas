@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+# Node
+node_modules/
+.next/
+.next-demo/
+out/
+# Entorno y datos locales
+.env
+.env.local
+apps/api/uploads/
+apps/api/uploads-demo/
+*.db
+.DS_Store
+.logs/
+
+# Herramientas
+tsconfig.tsbuildinfo
+*.log

@@ -1,0 +1,128 @@
+"use client";
+
+import { useRef } from "react";
+import useSWR from "swr";
+import { CalendarDays } from "lucide-react";
+import type { Categoria, MedioPago } from "@/lib/api";
+import { hoyISO, sumarDias } from "@/lib/format";
+import { Chip, IconoCat, cx } from "./ui";
+
+export function MedioChips({ valor, onCambio }: { valor: string | null; onCambio: (id: string) => void }) {
+  const { data: medios } = useSWR<MedioPago[]>("/medios-pago");
+  if (!medios) return <div className="esqueleto h-10 w-full" />;
+  if (!medios.length) return <p className="text-sm text-muted">Primero creá tus cuentas y medios de pago en Cuentas.</p>;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {medios.map((m) => (
+        <Chip key={m.id} activo={valor === m.id} onClick={() => onCambio(m.id)}>
+          {m.nombre}
+        </Chip>
+      ))}
+    </div>
+  );
+}
+
+/** Categorías como fila deslizable de íconos (reemplaza al select). */
+export function CategoriaPicker({
+  valor,
+  tipo,
+  onCambio,
+}: {
+  valor: string | null;
+  tipo: "gasto" | "ingreso";
+  onCambio: (id: string) => void;
+}) {
+  const { data } = useSWR<Categoria[]>("/categorias");
+  const lista = data?.filter((c) => c.tipo === tipo) ?? [];
+  return (
+    <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 pb-1" role="radiogroup" aria-label="Categoría">
+      {lista.map((c) => {
+        const activo = valor === c.id;
+        return (
+          <button
+            key={c.id}
+            role="radio"
+            aria-checked={activo}
+            onClick={() => onCambio(c.id)}
+            className={cx(
+              "press flex w-[76px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border px-1 py-2.5 text-[11px] leading-tight font-bold",
+              activo ? "border-ink bg-surface" : "border-transparent"
+            )}
+          >
+            <IconoCat icono={c.icono} color={c.color} size={38} />
+            <span className="line-clamp-2 text-center">{c.nombre}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Hoy / Ayer / Anteayer / otra fecha, sin el date picker como primera opción. */
+export function FechaChips({ valor, onCambio }: { valor: string; onCambio: (iso: string) => void }) {
+  const hoy = hoyISO();
+  const opciones = [
+    { iso: hoy, label: "Hoy" },
+    { iso: sumarDias(hoy, -1), label: "Ayer" },
+    { iso: sumarDias(hoy, -2), label: "Anteayer" },
+  ];
+  const otra = !opciones.some((o) => o.iso === valor);
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {opciones.map((o) => (
+        <Chip key={o.iso} activo={valor === o.iso} onClick={() => onCambio(o.iso)}>
+          {o.label}
+        </Chip>
+      ))}
+      <label className={cx(
+        "press relative inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-bold",
+        otra ? "border-ink bg-ink text-ground" : "border-line-strong bg-surface"
+      )}>
+        <CalendarDays size={15} />
+        {otra ? new Date(valor + "T12:00:00").toLocaleDateString("es-AR", { day: "numeric", month: "short" }) : "Otra"}
+        <input
+          ref={ref}
+          type="date"
+          value={valor}
+          max={hoy}
+          onChange={(e) => e.target.value && onCambio(e.target.value)}
+          className="absolute inset-0 cursor-pointer opacity-0"
+          aria-label="Elegir otra fecha"
+        />
+      </label>
+    </div>
+  );
+}
+
+/** Lista de opciones como filas tocables (reemplaza selects de cuentas). */
+export function OpcionesLista<T extends { id: string }>({
+  opciones,
+  valor,
+  onCambio,
+  render,
+}: {
+  opciones: T[];
+  valor: string;
+  onCambio: (id: string) => void;
+  render: (o: T) => React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5" role="radiogroup">
+      {opciones.map((o) => (
+        <button
+          key={o.id}
+          role="radio"
+          aria-checked={valor === o.id}
+          onClick={() => onCambio(o.id)}
+          className={cx(
+            "press flex min-h-14 items-center gap-3 rounded-2xl border bg-surface px-3 text-left",
+            valor === o.id ? "border-ink" : "border-transparent"
+          )}
+        >
+          {render(o)}
+        </button>
+      ))}
+    </div>
+  );
+}
