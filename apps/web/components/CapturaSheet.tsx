@@ -228,6 +228,8 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
           </div>
         )}
 
+        {vista?.aviso && <Mensaje>{vista.aviso}</Mensaje>}
+
         {vista?.cuotas && vista.cuotas > 1 && !/cuotas?\s+(fijas\s+)?de\s/i.test(texto) && (
           <p className="-mt-2 text-xs text-faint">
             ¿Tiene interés? Escribí el valor de la cuota («{vista.cuotas} cuotas de 110k») y anoto lo que vas a pagar de verdad.
@@ -251,7 +253,7 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
               <span className="text-[13px] font-bold">{ingreso ? "Entró en" : "Pagaste con"}</span>
               <span className="text-xs text-faint">{medio ? "elegido por vos" : (vista.motivo_medio ?? "elegí uno")}</span>
             </div>
-            <MedioChips valor={medioFinal} onCambio={setMedio} />
+            <MedioChips valor={medioFinal} onCambio={setMedio} soloCredito={!!vista?.cuotas && vista.cuotas > 1 && !vista.deuda_tipo} />
           </div>
         )}
 

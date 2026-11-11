@@ -15,6 +15,8 @@ from app.models import (
     MovimientoAdjunto,
     OrigenMovimiento,
     RolAdjunto,
+    TipoCuenta,
+    TipoMedioPago,
     TipoMovimiento,
 )
 from app.services.captura import Resultado, _plano, interpretar
@@ -63,7 +65,45 @@ def interpretar_texto(db: Session, texto: str) -> Resultado:
     categorias = list(db.scalars(select(Categoria)))
     r = interpretar(texto, medios, categorias)
     _aprender(db, r)
+    _revisar_cuotas(r, medios, texto)
     return r
+
+
+def _revisar_cuotas(r: Resultado, medios: list[MedioPago], texto: str) -> None:
+    """Las compras en cuotas van con tarjeta de crédito: nunca con una billetera o débito."""
+    from app.services.captura import MARCAS_TARJETA
+    if not r.cuotas or r.cuotas < 2 or r.deuda:
+        return
+    creditos = [m for m in medios if m.tipo == TipoMedioPago.credito and not m.archivado]
+    if r.medio and r.medio.tipo != TipoMedioPago.credito:
+        r.medio, r.motivo_medio = None, None
+    if r.medio:
+        return
+    marca = next((w for w in _plano(texto).split() if w.strip(".,") in MARCAS_TARJETA), None)
+    if marca:
+        r.aviso = (f"No tenés cargada la tarjeta «{marca.strip('.,').capitalize()}». Creala en Cuentas "
+                   "(tipo tarjeta de crédito) y las cuotas van a quedar en su resumen.")
+    elif not creditos:
+        r.aviso = "Para comprar en cuotas necesitás cargar tu tarjeta de crédito en Cuentas."
+    else:
+        r.aviso = "Es en cuotas: elegí con qué tarjeta."
+
+
+def sincronizar_plan(db: Session, mov: Movimiento) -> None:
+    """Al editar una compra confirmada: el plan de cuotas sigue a la tarjeta, las cuotas y el monto."""
+    from app.models import PlanCuotas
+    from decimal import Decimal
+    for pl in db.scalars(select(PlanCuotas).where(PlanCuotas.movimiento_id == mov.id)):
+        cuenta = db.get(Cuenta, mov.cuenta_id) if mov.cuenta_id else None
+        if not mov.cuotas or mov.cuotas < 2 or cuenta is None or cuenta.tipo != TipoCuenta.tarjeta_credito \
+                or pl.cuenta_id != mov.cuenta_id:
+            db.delete(pl)
+        else:
+            pl.cuotas_total = mov.cuotas
+            pl.monto_cuota = (mov.monto / mov.cuotas).quantize(Decimal("0.01"))
+    db.flush()
+    if mov.estado == EstadoMovimiento.confirmado:
+        plan_desde_movimiento(db, mov)
 
 
 class SinMonto(ValueError):
@@ -133,6 +173,9 @@ def resolver(db: Session, mov: Movimiento, confirmar: bool) -> None:
     if mov.cuenta_id is None:
         raise HTTPException(422, "Falta indicar con qué pagaste (medio de pago o cuenta).")
     cuenta = _obtener(db, Cuenta, mov.cuenta_id, "Cuenta")
+    if mov.tipo == TipoMovimiento.gasto and mov.cuotas and mov.cuotas > 1 and cuenta.tipo != TipoCuenta.tarjeta_credito:
+        raise HTTPException(422, f"Las compras en cuotas van con tarjeta de crédito, no con {cuenta.nombre}. "
+                                 "Elegí la tarjeta (o cargala en Cuentas), o sacale las cuotas.")
     if cuenta.moneda != mov.moneda:
         raise HTTPException(422, f"La cuenta {cuenta.nombre} es en {cuenta.moneda.value} y el movimiento en {mov.moneda.value}.")
 

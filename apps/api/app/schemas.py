@@ -152,6 +152,7 @@ class MovimientoPatch(BaseModel):
     medio_pago_id: uuid.UUID | None = None
     cuenta_id: uuid.UUID | None = None
     cuenta_destino_id: uuid.UUID | None = None
+    cuotas: int | None = Field(default=None, ge=1, le=72)
 
 
 class MovimientoOut(BaseModel):
@@ -178,6 +179,7 @@ class MovimientoOut(BaseModel):
     tiene_comprobante: bool
     valio: bool | None = None
     deuda_id: uuid.UUID | None = None
+    cuotas: int | None = None
     garantia: "GarantiaMini | None" = None
     creado: datetime
 
@@ -227,6 +229,7 @@ class Interpretacion(BaseModel):
     deuda_tipo: str | None = None
     deuda_nombre: str | None = None
     garantia_meses: int | None = None
+    aviso: str | None = None
     # Partes del texto reconocidas, para resaltarlas mientras escribís.
     partes: list["Parte"] = []
     # Por qué se eligió el medio de pago ("dijiste «visa»"), para mostrar en la UI.

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { ArrowLeftRight, ChevronRight, ExternalLink, ShieldPlus, Trash2, X } from "lucide-react";
-import { api, ApiError, type Movimiento } from "@/lib/api";
+import { api, ApiError, type MedioPago, type Movimiento } from "@/lib/api";
 import { monto } from "@/lib/format";
 import { vibrar } from "@/lib/hooks";
 import { AdjuntarBoton } from "./AdjuntarBoton";
@@ -11,7 +11,7 @@ import { EscudoGarantia, cuandoVence } from "./Garantias";
 import { CategoriaPicker, FechaChips, MedioChips } from "./Selectores";
 import { Sheet } from "./Sheet";
 import { useApp } from "./Shell";
-import { Boton, Campo, IconoCat, Mensaje, inputCls } from "./ui";
+import { Boton, Campo, Chip, IconoCat, Mensaje, inputCls } from "./ui";
 
 export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar: () => void }) {
   const { aviso, refrescar, abrirGarantia } = useApp();
@@ -23,6 +23,8 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
   const [fecha, setFecha] = useState("");
   const [categoria, setCategoria] = useState<string | null>(null);
   const [medio, setMedio] = useState<string | null>(null);
+  const [cuotas, setCuotas] = useState<number | null>(null);
+  const { data: medios } = useSWR<MedioPago[]>(id ? "/medios-pago" : null);
   const [error, setError] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
@@ -33,6 +35,7 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
     setFecha(mov.fecha);
     setCategoria(mov.categoria_id);
     setMedio(mov.medio_pago_id);
+    setCuotas(mov.cuotas);
     setError(null);
   }, [mov]);
 
@@ -45,7 +48,11 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
     if (fecha !== mov.fecha) cambios.fecha = fecha;
     if (categoria !== mov.categoria_id) cambios.categoria_id = categoria;
     if (medio !== mov.medio_pago_id) cambios.medio_pago_id = medio;
+    if ((cuotas ?? 1) !== (mov.cuotas ?? 1)) cambios.cuotas = cuotas ?? 1;
   }
+  const enCuotas = (cuotas ?? 1) > 1;
+  const medioActual = medios?.find((m) => m.id === medio);
+  const cuotasSinTarjeta = enCuotas && !!medioActual && medioActual.tipo !== "credito";
   const hayCambios = Object.keys(cambios).length > 0;
 
   async function correr(fn: () => Promise<unknown>, ok?: string) {
@@ -145,7 +152,21 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
           ) : (
             <div className="flex flex-col gap-2">
               <span className="text-[13px] font-bold">{ingreso ? "Entró en" : "Pagaste con"}</span>
-              <MedioChips valor={medio} onCambio={setMedio} />
+              {cuotasSinTarjeta && (
+                <Mensaje>Es en cuotas pero está cargada con {medioActual?.nombre}: elegí la tarjeta con la que la pagás (o dejala en un pago).</Mensaje>
+              )}
+              <MedioChips valor={medio} onCambio={setMedio} soloCredito={enCuotas && !ingreso} />
+            </div>
+          )}
+
+          {mov.tipo === "gasto" && !mov.deuda_id && (
+            <div className="flex flex-col gap-2">
+              <span className="text-[13px] font-bold">Cuotas</span>
+              <div className="flex flex-wrap gap-1.5">
+                {[...new Set([1, 3, 6, 12, 18, cuotas ?? 1])].sort((a, b) => a - b).map((k) => (
+                  <Chip key={k} activo={(cuotas ?? 1) === k} onClick={() => setCuotas(k === 1 ? null : k)}>{k === 1 ? "Un pago" : k}</Chip>
+                ))}
+              </div>
             </div>
           )}
 

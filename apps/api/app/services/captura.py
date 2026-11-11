@@ -28,6 +28,9 @@ RELLENO = {
     "anteayer", "pesos", "peso", "$", "cuota", "cuotas", "fijas", "sin", "interes",
 } | PALABRAS_USD
 
+# Marcas de tarjeta: si las nombrás y no tenés esa tarjeta cargada, te aviso en vez de usar otro medio
+MARCAS_TARJETA = {"visa", "master", "mastercard", "amex", "cabal", "diners"}
+
 RE_MONTO = re.compile(
     r"(?<![\w.,])(\d+(?:[.,]\d+)*)\s*(k|mil|lucas?|palos?|millon(?:es)?|m)?(?![\w])"
 )
@@ -99,6 +102,7 @@ class Resultado:
     cuotas: int | None
     garantia_meses: int | None = None
     partes: list[tuple[int, int, str]] = field(default_factory=list)
+    aviso: str | None = None  # algo que conviene decirte antes de guardar (p. ej. falta la tarjeta)
     # Préstamos entre personas: ("me_deben" | "debo", nombre)
     deuda: tuple[str, str] | None = None
 
@@ -263,7 +267,7 @@ def interpretar(
     partes = sorted(elegidas) if len(norm) == len(texto) else []
 
     # Descripción: lo que queda al sacar montos, medio de pago y palabras de relleno.
-    sacar = set(RELLENO) | set(MULTIPLICADORES)
+    sacar = set(RELLENO) | set(MULTIPLICADORES) | MARCAS_TARJETA
     if alias_usado:
         sacar |= set(alias_usado.split())
     texto_desc = texto

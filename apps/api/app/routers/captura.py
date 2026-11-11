@@ -32,6 +32,7 @@ def _a_schema(r: Resultado) -> Interpretacion:
         deuda_tipo=r.deuda[0] if r.deuda else None,
         deuda_nombre=r.deuda[1] if r.deuda else None,
         garantia_meses=r.garantia_meses,
+        aviso=r.aviso,
     )
 
 

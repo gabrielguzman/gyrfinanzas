@@ -22,7 +22,7 @@ from app.schemas import AdjuntoIn, AdjuntoOut, GarantiaMini, MovimientoIn, Movim
 from app.services import garantias as svc_garantias
 from app.services import archivos as svc_archivos
 from app.services.tarjetas import plan_desde_movimiento
-from app.services.registro import borrar as borrar_mov, confirmar as confirmar_mov, resolver, vincular as _vincular
+from app.services.registro import borrar as borrar_mov, confirmar as confirmar_mov, sincronizar_plan, resolver, vincular as _vincular
 
 router = APIRouter(prefix="/movimientos", tags=["movimientos"])
 
@@ -55,6 +55,7 @@ def serializar(m: Movimiento) -> MovimientoOut:
         cuenta_destino_id=m.cuenta_destino_id,
         cuenta_destino=m.cuenta_destino.nombre if m.cuenta_destino else None,
         adjuntos=adjuntos, tiene_comprobante=bool(adjuntos), valio=m.valio, deuda_id=m.deuda_id, creado=m.creado,
+        cuotas=m.cuotas,
     )
 
 
@@ -126,7 +127,10 @@ def editar(mov_id: uuid.UUID, datos: MovimientoPatch, db: Session = Depends(get_
     mov = _cargar(db, mov_id)
     for k, v in datos.model_dump(exclude_unset=True).items():
         setattr(mov, k, v)
+    if mov.cuotas == 1:
+        mov.cuotas = None
     resolver(db, mov, confirmar=mov.estado == EstadoMovimiento.confirmado)
+    sincronizar_plan(db, mov)
     db.commit()
     db.expire_all()
     return serializar(_cargar(db, mov_id))

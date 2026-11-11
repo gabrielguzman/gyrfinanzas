@@ -7,10 +7,19 @@ import type { Categoria, MedioPago } from "@/lib/api";
 import { hoyISO, sumarDias } from "@/lib/format";
 import { Chip, IconoCat, cx } from "./ui";
 
-export function MedioChips({ valor, onCambio }: { valor: string | null; onCambio: (id: string) => void }) {
-  const { data: medios } = useSWR<MedioPago[]>("/medios-pago");
-  if (!medios) return <div className="esqueleto h-10 w-full" />;
-  if (!medios.length) return <p className="text-sm text-muted">Primero creá tus cuentas y medios de pago en Cuentas.</p>;
+export function MedioChips({ valor, onCambio, soloCredito }: { valor: string | null; onCambio: (id: string) => void; soloCredito?: boolean }) {
+  const { data: todos } = useSWR<MedioPago[]>("/medios-pago");
+  if (!todos) return <div className="esqueleto h-10 w-full" />;
+  // En cuotas solo tiene sentido una tarjeta de crédito
+  const medios = soloCredito ? todos.filter((m) => m.tipo === "credito" && !m.archivado) : todos;
+  if (!todos.length) return <p className="text-sm text-muted">Primero creá tus cuentas y medios de pago en Cuentas.</p>;
+  if (!medios.length)
+    return (
+      <p className="text-sm text-muted">
+        Las cuotas van con tarjeta de crédito y no tenés ninguna cargada.{" "}
+        <a href="/cuentas" className="font-bold text-accent">Cargá tu tarjeta en Cuentas</a>.
+      </p>
+    );
   return (
     <div className="flex flex-wrap gap-1.5">
       {medios.map((m) => (

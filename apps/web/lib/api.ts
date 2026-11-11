@@ -61,6 +61,7 @@ export interface Movimiento {
   tiene_comprobante: boolean;
   valio: boolean | null;
   deuda_id: string | null;
+  cuotas: number | null;
   garantia: { id: string; vence: string; estado: EstadoGarantia; dias_restantes: number } | null;
   creado: string;
 }
@@ -82,6 +83,7 @@ export interface Interpretacion {
   deuda_tipo: string | null;
   deuda_nombre: string | null;
   garantia_meses: number | null;
+  aviso: string | null;
   motivo_medio: string | null;
   faltantes: string[];
 }

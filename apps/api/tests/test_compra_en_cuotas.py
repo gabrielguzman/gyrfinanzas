@@ -1,3 +1,4 @@
+import uuid
 from datetime import date
 from decimal import Decimal
 
@@ -31,3 +32,41 @@ def test_compra_en_cuotas_con_interes(client, base):
     # El patrimonio sí muestra la deuda completa
     p = client.get("/patrimonio").json()
     assert sum(Decimal(i["monto"]) for i in p["items"] if i["grupo"] == "Tarjetas") == 1_320_000
+
+
+def test_cuotas_sin_tarjeta_no_van_a_la_billetera(client, base):
+    # «visa» existe en el fixture; probamos con una tarjeta que no está cargada
+    v = client.post("/captura/previsualizar", json={"texto": "switch 1.4M en 12 cuotas master"}).json()
+    assert v["medio_pago_id"] is None and "Master" in v["aviso"]
+    # Aunque elijas Mercado Pago, en cuotas no se confirma
+    m = client.post("/captura", json={"texto": "switch 1.4M en 12 cuotas"}).json()
+    assert m["estado"] == "pendiente"
+    client.patch(f"/movimientos/{m['id']}", json={"medio_pago_id": base["medios"]["mp"]["id"]})
+    r = client.post(f"/movimientos/{m['id']}/confirmar")
+    assert r.status_code == 422 and "tarjeta de crédito" in r.json()["detail"]
+    # Con la Visa sí: plan de cuotas y la billetera intacta
+    client.patch(f"/movimientos/{m['id']}", json={"medio_pago_id": base["medios"]["visa"]["id"]})
+    assert client.post(f"/movimientos/{m['id']}/confirmar").status_code == 200
+    t = client.get(f"/tarjetas/{base['visa']['id']}").json()
+    assert len(t["planes"]) == 1
+
+
+def test_arreglar_una_compra_cargada_con_otro_medio(client, base):
+    """Una compra en cuotas que quedó en la billetera (datos viejos) se arregla cambiando el medio."""
+    from app.db import get_db
+    from app.main import app
+    from app.models import EstadoMovimiento, Movimiento, TipoMovimiento
+    db = next(app.dependency_overrides[get_db]())
+    mov = Movimiento(tipo=TipoMovimiento.gasto, estado=EstadoMovimiento.confirmado, fecha=date.today(),
+                     monto=Decimal(1_400_000), descripcion="Switch (12 cuotas)", cuotas=12,
+                     medio_pago_id=uuid.UUID(base["medios"]["mp"]["id"]), cuenta_id=uuid.UUID(base["mp"]["id"]))
+    db.add(mov)
+    db.commit()
+    saldos = {c["nombre"]: Decimal(c["saldo"]) for c in client.get("/cuentas").json()}
+    assert saldos["Mercado Pago"] == 20_000 - 1_400_000
+    r = client.patch(f"/movimientos/{mov.id}", json={"medio_pago_id": base["medios"]["visa"]["id"]})
+    assert r.status_code == 200
+    saldos = {c["nombre"]: Decimal(c["saldo"]) for c in client.get("/cuentas").json()}
+    assert saldos["Mercado Pago"] == 20_000 and saldos["Visa Galicia"] == -1_400_000
+    t = client.get(f"/tarjetas/{base['visa']['id']}").json()
+    assert len(t["planes"]) == 1 and t["planes"][0]["cuotas_total"] == 12

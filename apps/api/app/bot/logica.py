@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.bot.cliente import Botones
 from app.models import (
+    TipoMedioPago,
     Archivo,
     Cuenta,
     EstadoMovimiento,
@@ -200,7 +201,7 @@ class Bot:
             self._aportar(db, chat_id, *aporte)
             return
         try:
-            mov, _ = crear_desde_texto(db, texto, OrigenMovimiento.telegram)
+            mov, interpretado = crear_desde_texto(db, texto, OrigenMovimiento.telegram)
         except SinMonto as e:
             self.cliente.enviar(chat_id, f"🤔 {esc(str(e))}")
             return
@@ -223,6 +224,8 @@ class Bot:
         texto_resp, botones = self._tarjeta(db, mov)
         if adjuntado:
             texto_resp += "\n📎 Con el comprobante que me mandaste"
+        if interpretado.aviso:
+            texto_resp += f"\n⚠️ {esc(interpretado.aviso)}"
         self.cliente.enviar(chat_id, texto_resp, botones)
 
     def _tarjeta(self, db: Session, mov: Movimiento) -> tuple[str, Botones]:
@@ -252,6 +255,8 @@ class Bot:
 
     def _botones_medios(self, db: Session, mov: Movimiento) -> Botones:
         medios = db.scalars(select(MedioPago).where(MedioPago.archivado.is_(False)).order_by(MedioPago.nombre)).all()
+        if mov.cuotas and mov.cuotas > 1:  # en cuotas: solo tarjetas de crédito
+            medios = [md for md in medios if md.tipo == TipoMedioPago.credito]
         m = corto(mov.id)
         botones = [(md.nombre, f"m|{m}|{corto(md.id)}") for md in medios]
         return [botones[i:i + 2] for i in range(0, len(botones), 2)]
@@ -350,6 +355,7 @@ class Bot:
                     aviso = "Guardado"
                 except HTTPException as e:
                     aviso = str(e.detail)[:190]
+                    mov.medio_pago_id, mov.cuenta_id = None, None  # queda en la bandeja, sin ese medio
                 db.commit()
                 self.cliente.editar(chat_id, message_id, *self._tarjeta(db, mov))
             elif accion == "cm":  # mostrar medios
