@@ -10,6 +10,7 @@ import { vibrar } from "@/lib/hooks";
 import { CategoriaPicker, FechaChips, MedioChips } from "./Selectores";
 import { Sheet } from "./Sheet";
 import { duracion } from "./Garantias";
+import { FueraDeSaldo, anteriorALaCuenta, useCuentaDe } from "./FueraDeSaldo";
 import { useApp } from "./Shell";
 import { Boton, IconoCat, Mensaje, cx } from "./ui";
 
@@ -37,6 +38,7 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
   const [medio, setMedio] = useState<string | null>(null);
   const [categoria, setCategoria] = useState<string | null>(null);
   const [fecha, setFecha] = useState<string | null>(null);
+  const [fuera, setFuera] = useState<boolean | null>(null);
   const [verCategorias, setVerCategorias] = useState(false);
   const [archivo, setArchivo] = useState<File | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -76,6 +78,9 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
   const medioFinal = medio ?? vista?.medio_pago_id ?? null;
   const categoriaFinal = categoria ?? vista?.categoria_id ?? null;
   const fechaFinal = fecha ?? vista?.fecha ?? hoyISO();
+  const cuentaMov = useCuentaDe(medioFinal);
+  const sugerirFuera = anteriorALaCuenta(fechaFinal, cuentaMov);
+  const fueraFinal = fuera ?? sugerirFuera;
   const partes = vista && vista.para === texto ? vista.partes : [];
 
   function reiniciar() {
@@ -84,6 +89,7 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
     setMedio(null);
     setCategoria(null);
     setFecha(null);
+    setFuera(null);
     setVerCategorias(false);
     setArchivo(null);
     setError(null);
@@ -105,6 +111,7 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
       if (medio && medio !== mov.medio_pago_id) cambios.medio_pago_id = medio;
       if (categoria && categoria !== mov.categoria_id) cambios.categoria_id = categoria;
       if (fecha && fecha !== mov.fecha) cambios.fecha = fecha;
+      if (fueraFinal && mov.tipo !== "transferencia") cambios.fuera_de_saldo = true;
       if (Object.keys(cambios).length) mov = await api.patch<Movimiento>(`/movimientos/${mov.id}`, cambios);
       if (archivo) await api.subir(`/movimientos/${mov.id}/adjuntos/subir`, archivo, { rol: "ticket" });
       const id = mov.id;
@@ -263,6 +270,10 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
             <span className="text-[13px] font-bold">Cuándo</span>
             <FechaChips valor={fechaFinal} onCambio={setFecha} />
           </div>
+        )}
+
+        {vista && !vista.deuda_tipo && fechaFinal < hoyISO() && (
+          <FueraDeSaldo activo={fueraFinal} onCambio={setFuera} cuenta={cuentaMov} ingreso={vista.tipo === "ingreso"} sugerido={sugerirFuera} />
         )}
 
         {error && <Mensaje>{error}</Mensaje>}

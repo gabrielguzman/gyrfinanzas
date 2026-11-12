@@ -48,6 +48,7 @@ class CuentaOut(_Out):
     dia_cierre: int | None
     dia_vencimiento: int | None
     archivada: bool
+    creado: datetime | None = None
     saldo: Decimal = Decimal("0")
 
 
@@ -139,6 +140,7 @@ class MovimientoIn(BaseModel):
     cuenta_destino_id: uuid.UUID | None = None
     cuotas: int | None = Field(default=None, ge=1, le=72)
     etiquetas: list[str] | None = Field(default=None, max_length=20)
+    fuera_de_saldo: bool | None = None
     # Lo cargado a mano entra confirmado; la captura automática entra pendiente.
     estado: EstadoMovimiento = EstadoMovimiento.confirmado
 
@@ -155,6 +157,7 @@ class MovimientoPatch(BaseModel):
     cuenta_destino_id: uuid.UUID | None = None
     cuotas: int | None = Field(default=None, ge=1, le=72)
     etiquetas: list[str] | None = Field(default=None, max_length=20)
+    fuera_de_saldo: bool | None = None
 
 
 class MovimientoOut(BaseModel):
@@ -183,6 +186,7 @@ class MovimientoOut(BaseModel):
     deuda_id: uuid.UUID | None = None
     cuotas: int | None = None
     fijo_id: uuid.UUID | None = None
+    fuera_de_saldo: bool = False
     etiquetas: list[str] = []
     garantia: "GarantiaMini | None" = None
     creado: datetime

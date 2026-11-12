@@ -63,6 +63,9 @@ export function MovimientoFila({
         <span className="flex items-center gap-1.5 text-[15px] font-bold">
           <span className="truncate">{mov.descripcion}</span>
           {mov.tiene_comprobante && <Paperclip size={14} className="shrink-0 text-faint" aria-label="Con comprobante" />}
+          {mov.fuera_de_saldo && (
+            <span className="shrink-0 rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] font-bold text-muted" title="Ya estaba descontado del saldo: no lo mueve">fuera del saldo</span>
+          )}
           {mov.estado === "pendiente" && (
             <span className="shrink-0 rounded-md bg-warn-soft px-1.5 py-0.5 text-[11px] font-bold text-warn-ink">por confirmar</span>
           )}

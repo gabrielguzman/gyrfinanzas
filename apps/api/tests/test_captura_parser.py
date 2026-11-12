@@ -60,3 +60,22 @@ import pytest as _pytest
 def test_otras_formas_de_cuotas(texto, cuotas):
     from datetime import date
     assert interpretar(texto, [], [], hoy=date(2026, 11, 11)).cuotas == cuotas
+
+
+def test_fechas_explicitas():
+    from datetime import date
+    from app.services.captura import interpretar
+    hoy = date(2026, 11, 12)
+    casos = {
+        "farmacia 5000 mp 3/11": (date(2026, 11, 3), 5000),
+        "farmacia 5000 el 03/11/2026": (date(2026, 11, 3), 5000),
+        "regalo 25k el 20/12": (date(2025, 12, 20), 25000),   # sin año y en el futuro: el año pasado
+        "nafta 40k 5 de noviembre": (date(2026, 11, 5), 40000),
+        "luz 18k el 2 de oct": (date(2026, 10, 2), 18000),
+        "super 12500 31/02": (hoy, 12500),                    # fecha imposible: hoy
+    }
+    for texto, (f, m) in casos.items():
+        r = interpretar(texto, [], [], hoy=hoy)
+        assert (r.fecha, r.monto) == (f, m), texto
+    assert interpretar("farmacia 5000 3/11", [], [], hoy=hoy).descripcion == "Farmacia"
+    assert interpretar("nafta 40k el 5 de noviembre", [], [], hoy=hoy).descripcion == "Nafta"

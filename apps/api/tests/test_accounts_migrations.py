@@ -61,7 +61,7 @@ def test_puente_desde_ambas_0010_preserva_datos(origen):
         c.execute(text("INSERT INTO cuenta (id,nombre,tipo,moneda,saldo_inicial,archivada,creado) VALUES (:id,'Cuenta conservada','efectivo','ARS',123,false,now())"),{'id':uuid.uuid4()})
     migrate('head')
     with e.connect() as c:
-        assert c.scalar(text('SELECT version_num FROM alembic_version'))=='0012'
+        assert c.scalar(text('SELECT version_num FROM alembic_version'))=='0013'
         assert c.scalar(text("SELECT saldo_inicial FROM cuenta WHERE nombre='Cuenta conservada'"))==123
         for name in ['auth_usuario','auth_token','gasto_fijo','regla_categoria','push_suscripcion','aviso_enviado']:
             assert inspect(c).has_table(name,schema='public')
@@ -69,6 +69,6 @@ def test_puente_desde_ambas_0010_preserva_datos(origen):
             assert c.scalar(text("SELECT password_hash FROM auth_usuario WHERE email='owner@example.com'"))=='hash-original'
             for name in ['gasto_fijo','regla_categoria','push_suscripcion','aviso_enviado']:
                 assert inspect(c).has_table(name,schema=schema)
-            assert c.scalar(text(f'SELECT version_num FROM "{schema}".alembic_version'))=='0012'
+            assert c.scalar(text(f'SELECT version_num FROM "{schema}".alembic_version'))=='0013'
         else: assert c.scalar(text("SELECT monto FROM gasto_fijo WHERE clave='alquiler'"))==100
     e.dispose()

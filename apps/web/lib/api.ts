@@ -14,6 +14,7 @@ export interface Cuenta {
   dia_cierre: number | null;
   dia_vencimiento: number | null;
   archivada: boolean;
+  creado: string | null;
 }
 export interface MedioPago {
   id: string;
@@ -63,6 +64,7 @@ export interface Movimiento {
   deuda_id: string | null;
   cuotas: number | null;
   fijo_id: string | null;
+  fuera_de_saldo: boolean;
   etiquetas: string[];
   garantia: { id: string; vence: string; estado: EstadoGarantia; dias_restantes: number } | null;
   creado: string;

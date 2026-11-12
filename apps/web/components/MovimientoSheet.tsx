@@ -10,6 +10,7 @@ import { vibrar } from "@/lib/hooks";
 import { AdjuntarBoton } from "./AdjuntarBoton";
 import { EscudoGarantia, cuandoVence } from "./Garantias";
 import { EtiquetasEditor } from "./EtiquetasEditor";
+import { FueraDeSaldo, anteriorALaCuenta, useCuentaDe } from "./FueraDeSaldo";
 import { CategoriaPicker, FechaChips, MedioChips } from "./Selectores";
 import { Sheet } from "./Sheet";
 import { useApp } from "./Shell";
@@ -27,9 +28,11 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
   const [medio, setMedio] = useState<string | null>(null);
   const [cuotas, setCuotas] = useState<number | null>(null);
   const [etiquetas, setEtiquetas] = useState<string[]>([]);
+  const [fuera, setFuera] = useState(false);
   const { data: medios } = useSWR<MedioPago[]>(id ? "/medios-pago" : null);
   const { data: categorias } = useSWR<Categoria[]>(id ? "/categorias" : null);
   const [error, setError] = useState<string | null>(null);
+  const cuentaMov = useCuentaDe(medio, medio ? null : mov?.cuenta_id);
   const [ocupado, setOcupado] = useState(false);
 
   useEffect(() => {
@@ -41,6 +44,7 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
     setMedio(mov.medio_pago_id);
     setCuotas(mov.cuotas);
     setEtiquetas(mov.etiquetas ?? []);
+    setFuera(mov.fuera_de_saldo);
     setError(null);
   }, [mov]);
 
@@ -55,6 +59,7 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
     if (medio !== mov.medio_pago_id) cambios.medio_pago_id = medio;
     if ((cuotas ?? 1) !== (mov.cuotas ?? 1)) cambios.cuotas = cuotas ?? 1;
     if ([...etiquetas].sort().join() !== [...(mov.etiquetas ?? [])].sort().join()) cambios.etiquetas = etiquetas;
+    if (fuera !== mov.fuera_de_saldo) cambios.fuera_de_saldo = fuera;
   }
   const enCuotas = (cuotas ?? 1) > 1;
   const medioActual = medios?.find((m) => m.id === medio);
@@ -178,6 +183,11 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
                 ))}
               </div>
             </div>
+          )}
+
+          {!esTransfer && !mov.deuda_id && (
+            <FueraDeSaldo activo={fuera} onCambio={setFuera} cuenta={cuentaMov} ingreso={ingreso}
+              sugerido={!fuera && anteriorALaCuenta(fecha, cuentaMov)} />
           )}
 
           {!esTransfer && (

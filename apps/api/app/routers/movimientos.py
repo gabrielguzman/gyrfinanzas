@@ -57,7 +57,7 @@ def serializar(m: Movimiento) -> MovimientoOut:
         cuenta_destino_id=m.cuenta_destino_id,
         cuenta_destino=m.cuenta_destino.nombre if m.cuenta_destino else None,
         adjuntos=adjuntos, tiene_comprobante=bool(adjuntos), valio=m.valio, deuda_id=m.deuda_id, creado=m.creado,
-        cuotas=m.cuotas, fijo_id=m.fijo_id, etiquetas=sorted(e.nombre for e in m.etiquetas),
+        cuotas=m.cuotas, fijo_id=m.fijo_id, fuera_de_saldo=bool(m.fuera_de_saldo), etiquetas=sorted(e.nombre for e in m.etiquetas),
     )
 
 
@@ -119,6 +119,7 @@ def crear(datos: MovimientoIn, db: Session = Depends(get_db)):
     from app.services import etiquetas as svc_et
     valores = datos.model_dump()
     etiquetas = valores.pop("etiquetas", None)
+    valores["fuera_de_saldo"] = bool(valores.get("fuera_de_saldo"))
     mov = Movimiento(**valores)
     if mov.categoria_id is None and mov.tipo != TipoMovimiento.transferencia and not mov.deuda_id:
         from app.services.reglas import categoria_para
@@ -152,6 +153,8 @@ def editar(mov_id: uuid.UUID, datos: MovimientoPatch, db: Session = Depends(get_
     if "etiquetas" in cambios:
         from app.services.etiquetas import asignar
         asignar(db, mov, cambios.pop("etiquetas") or [])
+    if cambios.get("fuera_de_saldo") is None:
+        cambios.pop("fuera_de_saldo", None)
     for k, v in cambios.items():
         setattr(mov, k, v)
     if mov.cuotas == 1:

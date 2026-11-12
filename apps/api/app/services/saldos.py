@@ -13,7 +13,8 @@ CERO = Decimal("0")
 
 def saldos_por_cuenta(db: Session, hasta: date | None = None) -> dict[uuid.UUID, Decimal]:
     """Devuelve {cuenta_id: saldo} para todas las cuentas (al final del día `hasta`, si se pide)."""
-    confirmado = Movimiento.estado == EstadoMovimiento.confirmado
+    # Lo marcado «ya estaba descontado del saldo» no mueve el saldo
+    confirmado = (Movimiento.estado == EstadoMovimiento.confirmado) & Movimiento.fuera_de_saldo.is_(False)
     if hasta is not None:
         confirmado = confirmado & (Movimiento.fecha <= hasta)
 

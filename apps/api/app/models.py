@@ -160,6 +160,9 @@ class Movimiento(Base):
     texto_original: Mapped[str | None] = mapped_column(Text)
     # Compra en cuotas con tarjeta: al confirmar se crea su plan de cuotas.
     cuotas: Mapped[int | None] = mapped_column(Integer)
+    # Ya estaba reflejado en el saldo de la cuenta (lo cargaste después de poner el saldo):
+    # cuenta en gastos, categorías y reportes, pero no mueve el saldo.
+    fuera_de_saldo: Mapped[bool] = mapped_column(Boolean, default=False)
     # Repaso semanal: ¿valió la pena? (None = sin responder)
     valio: Mapped[bool | None] = mapped_column(Boolean)
     # Pago, cobro o préstamo asociado a una deuda.

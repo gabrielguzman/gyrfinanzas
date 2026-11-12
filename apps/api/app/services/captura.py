@@ -31,6 +31,38 @@ RELLENO = {
 # Marcas de tarjeta: si las nombrás y no tenés esa tarjeta cargada, te aviso en vez de usar otro medio
 MARCAS_TARJETA = {"visa", "master", "mastercard", "amex", "cabal", "diners"}
 
+MESES_NOMBRE = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre",
+                "octubre", "noviembre", "diciembre"]
+# «3/11», «el 03/11/2026», «3-11», «3 de noviembre», «el 3 de nov»
+RE_FECHA_NUM = re.compile(r"(?<![\w/.,-])(?:el\s+)?(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2}|\d{4}))?(?![\w/-])")
+RE_FECHA_MES = re.compile(
+    r"(?<!\w)(?:el\s+)?(\d{1,2})\s+de\s+(ene|feb|mar|abr|may|jun|jul|ago|sep|sept|oct|nov|dic)[a-z]*(?:\s+(?:de\s+)?(\d{4}))?(?!\w)")
+
+
+def _fecha_explicita(norm: str, hoy: date) -> tuple[date, tuple[int, int]] | None:
+    """Una fecha escrita con números o con el mes. Sin año: la más reciente que ya pasó."""
+    for rx, es_num in ((RE_FECHA_NUM, True), (RE_FECHA_MES, False)):
+        for m in rx.finditer(norm):
+            d = int(m.group(1))
+            if es_num:
+                mes = int(m.group(2))
+            else:
+                mes = next(i for i, n in enumerate(MESES_NOMBRE, 1) if n.startswith(m.group(2)[:3]))
+            anio = m.group(3)
+            try:
+                if anio:
+                    a = int(anio) + (2000 if len(anio) == 2 else 0)
+                    f = date(a, mes, d)
+                else:
+                    f = date(hoy.year, mes, d)
+                    if f > hoy:
+                        f = date(hoy.year - 1, mes, d)
+            except ValueError:
+                continue
+            return f, m.span()
+    return None
+
+
 RE_MONTO = re.compile(
     r"(?<![\w.,])(\d+(?:[.,]\d+)*)\s*(k|mil|lucas?|palos?|millon(?:es)?|m)?(?![\w])"
 )
@@ -231,10 +263,17 @@ def interpretar(
         partes.append((*m_usd.span(), "moneda"))
 
     m_fecha = re.search(r"(?<!\w)(anteayer|ayer|hoy)(?!\w)", norm)
+    explicita = None if m_fecha else _fecha_explicita(norm, hoy)
+    span_fecha = explicita[1] if explicita else None
     if m_fecha and m_fecha.group(1) == "anteayer":
         fecha = hoy - timedelta(days=2)
     elif m_fecha and m_fecha.group(1) == "ayer":
         fecha = hoy - timedelta(days=1)
+    elif explicita:
+        fecha = explicita[0]
+        a, b = explicita[1]
+        partes.append((a, b, "fecha"))
+        norm = norm[:a] + " " * (b - a) + norm[b:]  # que «3/11» no se lea como monto ni descripción
     else:
         fecha = hoy
     if m_fecha:
@@ -285,6 +324,8 @@ def interpretar(
     texto_desc = texto
     if span_gar and len(norm) == len(texto):
         texto_desc = texto[:span_gar[0]] + " " * (span_gar[1] - span_gar[0]) + texto[span_gar[1]:]
+    if span_fecha and len(norm) == len(texto):
+        texto_desc = texto_desc[:span_fecha[0]] + " " * (span_fecha[1] - span_fecha[0]) + texto_desc[span_fecha[1]:]
     restantes = [
         w for w in texto_desc.split()
         if normalizar(w).strip(".,;:") not in sacar and not re.search(r"\d", w)
