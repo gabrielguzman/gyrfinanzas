@@ -272,7 +272,7 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
           </div>
         )}
 
-        {vista && !vista.deuda_tipo && fechaFinal < hoyISO() && (
+        {vista && !vista.deuda_tipo && (
           <FueraDeSaldo activo={fueraFinal} onCambio={setFuera} cuenta={cuentaMov} ingreso={vista.tipo === "ingreso"} sugerido={sugerirFuera} />
         )}
 
