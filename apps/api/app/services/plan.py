@@ -11,6 +11,7 @@ ni compra en cuotas (cuenta por cuota, al pagar el resumen), ni pago de deudas.
 """
 import calendar
 from collections import defaultdict
+import uuid
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
@@ -212,7 +213,7 @@ def calcular(db: Session, hoy: date | None = None) -> Plan:
 
     real = sum((m.monto for m in _ingresos(db, desde, hasta)), CERO)
     plan.ingreso = max(cb.monto or CERO, real)
-    plan.detalle_fijos = [(r.nombre, r.ultimo) for r in rec]
+    plan.detalle_fijos = [(r.nombre if r.cada_meses == 1 else f"{r.nombre} (apartado)", r.ultimo) for r in rec]
     plan.fijos = sum((v for _, v in plan.detalle_fijos), CERO)
 
     # Cuotas de los resúmenes que vencen dentro del ciclo
@@ -344,7 +345,15 @@ def calendario(db: Session, hoy: date | None = None, dias: int = 60) -> Calendar
             f, quedan = dia_en(*_mes(f.year, f.month, 1), d.dia_vencimiento or f.day), quedan - 1
 
     # Fijos (alquiler, servicios, suscripciones): un mes después del último pago
+    from app.models import GastoFijo
+    from app.services import fijos as svc_fijos
     for r in recurrentes(db, hoy):
+        if r.cada_meses > 1 and r.fijo_id:
+            f = db.get(GastoFijo, uuid.UUID(r.fijo_id))
+            for d in svc_fijos.ocurrencias(f, hoy, fin):
+                if d > hoy or f.ultimo_periodo != svc_fijos.periodo(hoy):
+                    ev.append(Evento(d, "fijo", f.nombre, -f.monto, True))
+            continue
         if not r.ultima:
             continue
         f = dia_en(*_mes(r.ultima.year, r.ultima.month, 1), r.ultima.day)

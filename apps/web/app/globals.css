@@ -201,5 +201,6 @@ body { font-feature-settings: "ss01"; }
 .espejo mark[data-t="monto"] { --mark: color-mix(in oklab, var(--accent) 22%, transparent); }
 .espejo mark[data-t="medio"] { --mark: color-mix(in oklab, var(--ok) 22%, transparent); }
 .espejo mark[data-t="categoria"] { --mark: color-mix(in oklab, var(--warn) 24%, transparent); }
+.espejo mark[data-t="etiqueta"] { --mark: color-mix(in oklab, #ec4899 22%, transparent); }
 .espejo mark[data-t="garantia"] { --mark: color-mix(in oklab, #0ea5a4 24%, transparent); }
 .espejo mark[data-t="fecha"], .espejo mark[data-t="cuotas"], .espejo mark[data-t="moneda"] { --mark: color-mix(in oklab, #8b5cf6 22%, transparent); }

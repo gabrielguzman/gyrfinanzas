@@ -9,6 +9,7 @@ import { monto } from "@/lib/format";
 import { vibrar } from "@/lib/hooks";
 import { AdjuntarBoton } from "./AdjuntarBoton";
 import { EscudoGarantia, cuandoVence } from "./Garantias";
+import { EtiquetasEditor } from "./EtiquetasEditor";
 import { CategoriaPicker, FechaChips, MedioChips } from "./Selectores";
 import { Sheet } from "./Sheet";
 import { useApp } from "./Shell";
@@ -25,6 +26,7 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
   const [categoria, setCategoria] = useState<string | null>(null);
   const [medio, setMedio] = useState<string | null>(null);
   const [cuotas, setCuotas] = useState<number | null>(null);
+  const [etiquetas, setEtiquetas] = useState<string[]>([]);
   const { data: medios } = useSWR<MedioPago[]>(id ? "/medios-pago" : null);
   const { data: categorias } = useSWR<Categoria[]>(id ? "/categorias" : null);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +40,7 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
     setCategoria(mov.categoria_id);
     setMedio(mov.medio_pago_id);
     setCuotas(mov.cuotas);
+    setEtiquetas(mov.etiquetas ?? []);
     setError(null);
   }, [mov]);
 
@@ -51,6 +54,7 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
     if (categoria !== mov.categoria_id) cambios.categoria_id = categoria;
     if (medio !== mov.medio_pago_id) cambios.medio_pago_id = medio;
     if ((cuotas ?? 1) !== (mov.cuotas ?? 1)) cambios.cuotas = cuotas ?? 1;
+    if ([...etiquetas].sort().join() !== [...(mov.etiquetas ?? [])].sort().join()) cambios.etiquetas = etiquetas;
   }
   const enCuotas = (cuotas ?? 1) > 1;
   const medioActual = medios?.find((m) => m.id === medio);
@@ -173,6 +177,13 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
                   <Chip key={k} activo={(cuotas ?? 1) === k} onClick={() => setCuotas(k === 1 ? null : k)}>{k === 1 ? "Un pago" : k}</Chip>
                 ))}
               </div>
+            </div>
+          )}
+
+          {!esTransfer && (
+            <div className="flex flex-col gap-2">
+              <span className="text-[13px] font-bold">Etiquetas</span>
+              <EtiquetasEditor valor={etiquetas} onCambio={setEtiquetas} />
             </div>
           )}
 

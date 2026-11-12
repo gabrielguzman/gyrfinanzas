@@ -111,6 +111,7 @@ class Resultado:
     aviso: str | None = None  # algo que conviene decirte antes de guardar (p. ej. falta la tarjeta)
     # Préstamos entre personas: ("me_deben" | "debo", nombre)
     deuda: tuple[str, str] | None = None
+    etiquetas: list[str] = field(default_factory=list)
 
     @property
     def faltantes(self) -> list[str]:

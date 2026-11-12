@@ -2,16 +2,31 @@
 
 import { useEffect, useState } from "react";
 import useSWR from "swr";
-import { Check, Plus, Repeat, Sparkles } from "lucide-react";
+import { CalendarClock, Check, Plus, Repeat, Sparkles } from "lucide-react";
 import { CategoriaPicker, MedioChips } from "@/components/Selectores";
 import { Sheet } from "@/components/Sheet";
 import { useApp } from "@/components/Shell";
-import { Boton, Campo, Esqueleto, IconoCat, Lista, Mensaje, Seccion, Titulo, Vacio, cx, inputCls } from "@/components/ui";
+import { Boton, Campo, Chip, Esqueleto, IconoCat, Lista, Mensaje, Seccion, Titulo, Vacio, cx, inputCls } from "@/components/ui";
 import { api, ApiError, type Fijo, type Fijos, type FijoSugerido } from "@/lib/api";
-import { fechaCorta, monto } from "@/lib/format";
+import { MESES, fechaCorta, monto } from "@/lib/format";
 import { useContador, vibrar } from "@/lib/hooks";
 
 const pesos = (v: string | number) => monto(Math.round(Number(v)));
+
+const FRECUENCIAS = [
+  { cada: 1, label: "Todos los meses" },
+  { cada: 2, label: "Cada 2 meses" },
+  { cada: 3, label: "Cada 3 meses" },
+  { cada: 6, label: "Cada 6 meses" },
+  { cada: 12, label: "Una vez al año" },
+];
+const MES_CORTO = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+function frecuencia(f: Fijo): string {
+  if (f.cada_meses === 1) return `El ${f.dia} de cada mes`;
+  if (f.cada_meses === 12) return `Una vez al año · ${f.dia} de ${MESES[(f.mes_inicio ?? 1) - 1]}`;
+  return `Cada ${f.cada_meses} meses · el ${f.dia}`;
+}
 
 function Estado({ f, onAbrirMov }: { f: Fijo; onAbrirMov: (id: string) => void }) {
   if (f.este_mes === "pagado")
@@ -82,6 +97,26 @@ function Sugerencias({ sug, onListo }: { sug: FijoSugerido[]; onListo: () => voi
 
 type Abierto = { nuevo: true } | { fijo: Fijo } | null;
 
+function ListaFijos({ fijos, onAbrir, onAbrirMov }: { fijos: Fijo[]; onAbrir: (f: Fijo) => void; onAbrirMov: (id: string) => void }) {
+  return (
+    <Lista>
+      {fijos.map((f) => (
+        <button key={f.id} onClick={() => onAbrir(f)} className="press flex min-h-[64px] w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-surface-2">
+          <IconoCat icono={f.categoria_icono} color={f.categoria_color} />
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="truncate text-[15px] font-bold">{f.nombre}</span>
+            <span className="truncate text-[13px] text-muted">{frecuencia(f)}{f.medio_pago && ` · ${f.medio_pago}`}</span>
+          </span>
+          <span className="flex shrink-0 flex-col items-end gap-1">
+            <span className="num text-[15px] font-extrabold">{pesos(f.monto)}</span>
+            <Estado f={f} onAbrirMov={onAbrirMov} />
+          </span>
+        </button>
+      ))}
+    </Lista>
+  );
+}
+
 function FijoSheet({ abierto, onCerrar }: { abierto: Abierto; onCerrar: () => void }) {
   const { aviso, refrescar } = useApp();
   const f = abierto && "fijo" in abierto ? abierto.fijo : null;
@@ -90,6 +125,8 @@ function FijoSheet({ abierto, onCerrar }: { abierto: Abierto; onCerrar: () => vo
   const [dia, setDia] = useState("");
   const [categoria, setCategoria] = useState<string | null>(null);
   const [medio, setMedio] = useState<string | null>(null);
+  const [cada, setCada] = useState(1);
+  const [mes, setMes] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
@@ -100,6 +137,8 @@ function FijoSheet({ abierto, onCerrar }: { abierto: Abierto; onCerrar: () => vo
     setDia(f ? String(f.dia) : String(new Date().getDate()));
     setCategoria(f?.categoria_id ?? null);
     setMedio(f?.medio_pago_id ?? null);
+    setCada(f?.cada_meses ?? 1);
+    setMes(f?.mes_inicio ?? null);
     setError(null);
   }, [abierto, f]);
 
@@ -118,8 +157,9 @@ function FijoSheet({ abierto, onCerrar }: { abierto: Abierto; onCerrar: () => vo
     }
   }
 
-  const datos = { nombre: nombre.trim(), monto: valor, dia: Number(dia), categoria_id: categoria, medio_pago_id: medio };
-  const valido = datos.nombre && Number(valor) > 0 && datos.dia >= 1 && datos.dia <= 31;
+  const datos = { nombre: nombre.trim(), monto: valor, dia: Number(dia), categoria_id: categoria, medio_pago_id: medio,
+    cada_meses: cada, mes_inicio: cada > 1 ? mes : null };
+  const valido = datos.nombre && Number(valor) > 0 && datos.dia >= 1 && datos.dia <= 31 && (cada === 1 || mes !== null);
 
   return (
     <Sheet abierto={!!abierto} onCerrar={onCerrar} titulo={f ? f.nombre : "Nuevo gasto fijo"}>
@@ -134,6 +174,20 @@ function FijoSheet({ abierto, onCerrar }: { abierto: Abierto; onCerrar: () => vo
           <input className={cx(inputCls, "num")} inputMode="numeric" value={dia} onChange={(e) => setDia(e.target.value.replace(/\D/g, "").slice(0, 2))} />
         </Campo>
       </div>
+      <Campo label="Cada cuánto">
+        <div className="flex flex-wrap gap-1.5">
+          {FRECUENCIAS.map((x) => <Chip key={x.cada} activo={cada === x.cada} onClick={() => setCada(x.cada)}>{x.label}</Chip>)}
+        </div>
+      </Campo>
+      {cada > 1 && (
+        <Campo label={cada === 12 ? "¿En qué mes?" : "Un mes en que toca"} ayuda={Number(valor) > 0 ? `En el plan se apartan ${pesos(Number(valor) / cada)} por mes, así cuando llega ya está la plata.` : undefined}>
+          <div className="grid grid-cols-6 gap-1.5">
+            {MES_CORTO.map((m, i) => (
+              <Chip key={m} activo={mes === i + 1} onClick={() => setMes(i + 1)} className="justify-center px-0">{m}</Chip>
+            ))}
+          </div>
+        </Campo>
+      )}
       <Campo label="Categoría">
         <CategoriaPicker valor={categoria} tipo="gasto" onCambio={setCategoria} />
       </Campo>
@@ -167,8 +221,11 @@ export default function FijosPage() {
 
   if (!data) return <Esqueleto className="h-96 rounded-[28px]" />;
   const activos = data.fijos.filter((f) => f.activo).sort((a, b) => a.proxima.localeCompare(b.proxima));
+  const mensuales = activos.filter((f) => f.cada_meses === 1);
+  const cadaTanto = activos.filter((f) => f.cada_meses > 1);
   const descartados = data.fijos.filter((f) => !f.activo);
-  const pagado = Number(data.pagado_mes), tot = Number(data.total_mensual);
+  const pagado = Number(data.pagado_mes), tot = Number(data.este_mes_total);
+  const apartado = cadaTanto.reduce((a, f) => a + Number(f.por_mes), 0);
   const proximo = activos.find((f) => f.este_mes === "por_venir");
 
   return (
@@ -179,7 +236,7 @@ export default function FijosPage() {
         <section className="flex flex-col gap-4 rounded-[28px] bg-surface p-6 shadow-soft">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="flex flex-col gap-1">
-              <span className="text-sm font-semibold text-muted">Por mes pagás</span>
+              <span className="text-sm font-semibold text-muted">{cadaTanto.length ? "Por mes, contando lo que apartás" : "Por mes pagás"}</span>
               <span className="display num text-[40px] leading-none font-bold">{pesos(total)}</span>
             </div>
             {proximo && (
@@ -193,7 +250,7 @@ export default function FijosPage() {
               <div className="suave h-full rounded-full bg-ok" style={{ width: `${tot ? Math.min(100, (pagado / tot) * 100) : 0}%` }} />
             </div>
             <span className="text-[13px] text-muted">
-              Este mes ya pagaste <b className="num text-ink">{pesos(pagado)}</b>{pagado < tot && <>; faltan <b className="num text-ink">{pesos(tot - pagado)}</b></>}.
+              Este mes {tot > pagado ? "toca" : "tocaban"} <b className="num text-ink">{pesos(tot)}</b> y ya pagaste <b className="num text-ink">{pesos(pagado)}</b>.
             </span>
           </div>
         </section>
@@ -201,34 +258,37 @@ export default function FijosPage() {
 
       {data.sugeridos.length > 0 && <Sugerencias sug={data.sugeridos} onListo={() => mutate()} />}
 
-      {activos.length > 0 ? (
-        <Seccion titulo="Tus fijos">
-          <Lista>
-            {activos.map((f) => (
-              <button key={f.id} onClick={() => setAbierto({ fijo: f })} className="press flex min-h-[64px] w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-surface-2">
-                <IconoCat icono={f.categoria_icono} color={f.categoria_color} />
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="truncate text-[15px] font-bold">{f.nombre}</span>
-                  <span className="truncate text-[13px] text-muted">El {f.dia} de cada mes{f.medio_pago && ` · ${f.medio_pago}`}</span>
-                </span>
-                <span className="flex shrink-0 flex-col items-end gap-1">
-                  <span className="num text-[15px] font-extrabold">{pesos(f.monto)}</span>
-                  <Estado f={f} onAbrirMov={abrirMovimiento} />
-                </span>
-              </button>
-            ))}
-          </Lista>
+      {mensuales.length > 0 && (
+        <Seccion titulo="Todos los meses">
+          <ListaFijos fijos={mensuales} onAbrir={(f) => setAbierto({ fijo: f })} onAbrirMov={abrirMovimiento} />
           <p className="flex items-start gap-2 text-[13px] text-muted">
             <Repeat size={15} className="mt-0.5 shrink-0" />
             El día que toca, cada uno aparece en la bandeja con el último monto. Si cambió, lo corregís al confirmar y el mes que viene propone el nuevo.
           </p>
         </Seccion>
-      ) : (
-        data.sugeridos.length === 0 && (
-          <Vacio titulo="Todavía no hay gastos fijos" accion={<Boton variante="acento" onClick={() => setAbierto({ nuevo: true })}><Plus size={18} /> Cargar el primero</Boton>}>
-            Alquiler, expensas, internet, el gimnasio, Netflix. Cuando algo se repite dos meses en tus movimientos, te lo sugiero acá solo.
-          </Vacio>
-        )
+      )}
+
+      {cadaTanto.length > 0 && (
+        <Seccion titulo="Cada tanto">
+          <ListaFijos fijos={cadaTanto} onAbrir={(f) => setAbierto({ fijo: f })} onAbrirMov={abrirMovimiento} />
+          <p className="flex items-start gap-2 text-[13px] text-muted">
+            <CalendarClock size={15} className="mt-0.5 shrink-0" />
+            <span>En el plan se apartan <b className="num text-ink">{pesos(apartado)}</b> por mes para estos, y te aviso tres semanas antes de cada uno.</span>
+          </p>
+        </Seccion>
+      )}
+
+      {activos.length === 0 && data.sugeridos.length === 0 && (
+        <Vacio titulo="Todavía no hay gastos fijos" accion={<Boton variante="acento" onClick={() => setAbierto({ nuevo: true })}><Plus size={18} /> Cargar el primero</Boton>}>
+          Alquiler, expensas, internet, Netflix, y también los que vienen cada tanto: patente, seguro, ABL. Cuando algo se repite dos meses en tus movimientos, te lo sugiero acá solo.
+        </Vacio>
+      )}
+
+      {activos.length > 0 && cadaTanto.length === 0 && (
+        <button onClick={() => setAbierto({ nuevo: true })} className="press flex items-center gap-3 rounded-[22px] border border-dashed border-line-strong p-4 text-left">
+          <CalendarClock size={20} className="shrink-0 text-accent" />
+          <span className="text-sm text-muted"><b className="text-ink">¿Patente, seguro, ABL?</b> Cargá también los que no vienen todos los meses: los reparto en el plan para que no te agarren de sorpresa.</span>
+        </button>
       )}
 
       {descartados.length > 0 && (

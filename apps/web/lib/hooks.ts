@@ -58,6 +58,29 @@ export function useTema(): [Tema, (t: Tema) => void] {
   return [tema, setTema];
 }
 
+/** Modo discreto: oculta los montos (borrosos) en este dispositivo. */
+export function useDiscreto(): [boolean, () => void] {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const leer = () => setOn(document.documentElement.classList.contains("discreto"));
+    leer();
+    window.addEventListener("gyr-discreto", leer);
+    return () => window.removeEventListener("gyr-discreto", leer);
+  }, []);
+  const alternar = () => {
+    const nuevo = !document.documentElement.classList.contains("discreto");
+    document.documentElement.classList.toggle("discreto", nuevo);
+    try {
+      if (nuevo) localStorage.setItem("gyr-discreto", "1");
+      else localStorage.removeItem("gyr-discreto");
+    } catch {
+      /* sin almacenamiento */
+    }
+    window.dispatchEvent(new Event("gyr-discreto"));
+  };
+  return [on, alternar];
+}
+
 export function vibrar(ms = 12) {
   try {
     navigator.vibrate?.(ms);

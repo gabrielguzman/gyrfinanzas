@@ -185,6 +185,7 @@ class Movimiento(Base):
         back_populates="movimiento", cascade="all, delete-orphan"
     )
     garantias: Mapped[list["Garantia"]] = relationship(back_populates="movimiento")
+    etiquetas: Mapped[list["Etiqueta"]] = relationship(secondary="movimiento_etiqueta", order_by="Etiqueta.nombre")
 
 
 class Archivo(Base):
@@ -470,6 +471,10 @@ class GastoFijo(Base):
     clave: Mapped[str] = mapped_column(String(160), unique=True)
     monto: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
     dia: Mapped[int] = mapped_column(Integer, default=1)
+    # Cada cuántos meses: 1 mensual, 2 bimestral, 3, 4, 6, 12 anual
+    cada_meses: Mapped[int] = mapped_column(Integer, default=1)
+    # Para los que no son mensuales: un mes (1-12) en que toca; los demás se cuentan desde ahí
+    mes_inicio: Mapped[int | None] = mapped_column(Integer)
     categoria_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categoria.id", ondelete="SET NULL"))
     medio_pago_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("medio_pago.id", ondelete="SET NULL"))
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -511,3 +516,26 @@ class AvisoEnviado(Base):
 
     clave: Mapped[str] = mapped_column(String(200), primary_key=True)
     creado: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Etiqueta(Base):
+    """#vacaciones2027, #mudanza: agrupa gastos de distintas categorías (un viaje, un proyecto)."""
+    __tablename__ = "etiqueta"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    nombre: Mapped[str] = mapped_column(String(60), unique=True)  # sin «#», minúsculas, sin tildes
+    creado: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class MovimientoEtiqueta(Base):
+    __tablename__ = "movimiento_etiqueta"
+
+    movimiento_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("movimiento.id", ondelete="CASCADE"), primary_key=True)
+    etiqueta_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("etiqueta.id", ondelete="CASCADE"), primary_key=True, index=True)
+
+
+class DiaSinGastos(Base):
+    """«Hoy no gasté nada»: cuenta para la racha de registro aunque no haya movimientos."""
+    __tablename__ = "dia_sin_gastos"
+
+    fecha: Mapped[date] = mapped_column(Date, primary_key=True)

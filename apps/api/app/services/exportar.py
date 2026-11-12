@@ -25,13 +25,14 @@ TIPO_DEUDA = {"prestamo": "Préstamo", "debo": "Le debés", "me_deben": "Te debe
 MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
 
 COLUMNAS = ["Fecha", "Tipo", "Descripción", "Categoría", "Importe", "Moneda", "Medio de pago", "Cuenta",
-            "Cuenta destino", "Cuotas", "Estado", "Lo que escribiste"]
+            "Cuenta destino", "Cuotas", "Etiquetas", "Estado", "Lo que escribiste"]
 
 
 def movimientos(db: Session, desde: date | None, hasta: date | None, pendientes: bool = False) -> list[Movimiento]:
     q = (select(Movimiento)
          .options(selectinload(Movimiento.categoria), selectinload(Movimiento.medio_pago),
-                  selectinload(Movimiento.cuenta), selectinload(Movimiento.cuenta_destino))
+                  selectinload(Movimiento.cuenta), selectinload(Movimiento.cuenta_destino),
+                  selectinload(Movimiento.etiquetas))
          .order_by(Movimiento.fecha, Movimiento.creado))
     if not pendientes:
         q = q.where(Movimiento.estado == EstadoMovimiento.confirmado)
@@ -51,7 +52,7 @@ def _fila(m: Movimiento) -> list:
         m.fecha, TIPO[m.tipo.value], m.descripcion, m.categoria.nombre if m.categoria else "",
         _importe(m), m.moneda.value, m.medio_pago.nombre if m.medio_pago else "",
         m.cuenta.nombre if m.cuenta else "", m.cuenta_destino.nombre if m.cuenta_destino else "",
-        m.cuotas or "", "Confirmado" if m.estado == EstadoMovimiento.confirmado else "En la bandeja",
+        m.cuotas or "", " ".join(sorted(f"#{e.nombre}" for e in m.etiquetas)), "Confirmado" if m.estado == EstadoMovimiento.confirmado else "En la bandeja",
         m.texto_original or "",
     ]
 
@@ -117,7 +118,7 @@ def excel(db: Session, desde: date | None = None, hasta: date | None = None, hoy
 
     # 1) Movimientos
     _hoja(wb, "Movimientos", COLUMNAS, [_fila(m) for m in movs], {1: FECHA, 5: PESOS},
-          {3: 34, 12: 40}, primera=True)
+          {3: 34, 13: 40}, primera=True)
 
     # 2) Resumen por mes y 3) por categoría (pesos; las compras en cuotas van enteras en el mes de compra)
     por_mes: dict[str, dict[str, Decimal]] = defaultdict(lambda: {"ing": CERO, "gas": CERO})

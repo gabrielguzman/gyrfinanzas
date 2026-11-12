@@ -212,6 +212,7 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
                 {vista.deuda_tipo === "me_deben" ? `Se suma a lo que te debe ${vista.deuda_nombre}` : vista.deuda_tipo === "debo" ? `Se anota en lo que le debés a ${vista.deuda_nombre}` : TIPO[vista.tipo]}
                 {vista.cuotas ? ` en ${vista.cuotas} cuotas${vista.monto ? ` de ${monto(Math.round(Number(vista.monto) / vista.cuotas))}` : ""}` : ""}
                 {vista.garantia_meses ? ` · garantía ${duracion(vista.garantia_meses)}` : ""}
+                {vista.etiquetas?.length ? <span data-cat="pink" className="font-bold text-[var(--cat-fg)]"> · {vista.etiquetas.map((t) => `#${t}`).join(" ")}</span> : ""}
               </span>
               <span className="truncate text-lg font-extrabold">{vista.descripcion}</span>
               {!vista.deuda_tipo && <button

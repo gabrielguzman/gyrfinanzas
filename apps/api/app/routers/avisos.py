@@ -15,6 +15,7 @@ class Preferencias(BaseModel):
     notif_fijos: bool
     notif_vencimientos: bool
     notif_avisos: bool
+    notif_racha: bool
     notif_hora: str
 
 
@@ -23,6 +24,7 @@ class PreferenciasPatch(BaseModel):
     notif_fijos: bool | None = None
     notif_vencimientos: bool | None = None
     notif_avisos: bool | None = None
+    notif_racha: bool | None = None
     notif_hora: str | None = Field(default=None, pattern=r"^\d{1,2}:\d{1,2}$")
 
 

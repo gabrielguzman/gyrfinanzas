@@ -65,12 +65,14 @@ class Recurrente:
     ultima: date | None = None      # fecha del último pago
     con_tarjeta: bool = False       # se paga con tarjeta de crédito (va al resumen)
     fijo_id: str | None = None      # si lo tenés configurado como gasto fijo
+    cada_meses: int = 1             # >1: no es mensual; `ultimo` es lo que se aparta por mes
+    monto_total: Decimal | None = None
 
 
 def recurrentes(db: Session, hoy: date) -> list[Recurrente]:
     """Tus gastos fijos: los que configuraste más los detectados que no descartaste."""
     from app.models import GastoFijo, MedioPago
-    from app.services.fijos import dia_en
+    from app.services.fijos import dia_en, por_mes
     fijos = {f.clave: f for f in db.scalars(select(GastoFijo))}
     salida = []
     for r in recurrentes_detectados(db, hoy):
@@ -78,9 +80,9 @@ def recurrentes(db: Session, hoy: date) -> list[Recurrente]:
         if f is not None and not f.activo:
             continue  # le dijiste que no es fijo
         if f is not None:
-            r.nombre, r.fijo_id = f.nombre, str(f.id)
+            r.nombre, r.fijo_id, r.cada_meses = f.nombre, str(f.id), f.cada_meses or 1
             if f.monto > 0:
-                r.ultimo = f.monto
+                r.ultimo, r.monto_total = por_mes(f), f.monto
         salida.append(r)
     for f in fijos.values():
         if not f.activo or f.monto <= 0:
@@ -91,8 +93,9 @@ def recurrentes(db: Session, hoy: date) -> list[Recurrente]:
             ultima = dia_en(a, m, f.dia)
         medio = db.get(MedioPago, f.medio_pago_id) if f.medio_pago_id else None
         salida.append(Recurrente(
-            f.clave, f.nombre, f.monto, None, 0, f.categoria.nombre if f.categoria else None, ultima=ultima,
-            con_tarjeta=bool(medio and medio.cuenta.tipo == TipoCuenta.tarjeta_credito), fijo_id=str(f.id)))
+            f.clave, f.nombre, por_mes(f), None, 0, f.categoria.nombre if f.categoria else None, ultima=ultima,
+            con_tarjeta=bool(medio and medio.cuenta.tipo == TipoCuenta.tarjeta_credito), fijo_id=str(f.id),
+            cada_meses=f.cada_meses or 1, monto_total=f.monto))
     return sorted(salida, key=lambda r: -r.ultimo)
 
 
@@ -269,6 +272,21 @@ def _fijos_atrasados(db: Session, hoy: date) -> list[Hallazgo]:
     return out
 
 
+def _no_mensuales(db: Session, hoy: date) -> list[Hallazgo]:
+    from app.services.fijos import proximos_no_mensuales
+    out = []
+    for f, d in proximos_no_mensuales(db, hoy):
+        dias = (d - hoy).days
+        cuando = {0: "es hoy", 1: "es mañana"}.get(dias, f"es en {dias} días")
+        out.append(Hallazgo(
+            clave=f"no_mensual:{f.id}:{d}", tipo="no_mensual", tono="aviso", orden=12,
+            titulo=f"{f.nombre}: {cuando}",
+            detalle=f"El {d:%d/%m} toca pagar {_pesos(f.monto)}. Es de los que no vienen todos los meses: que no te agarre de sorpresa.",
+            monto=f.monto, accion={"tipo": "link", "valor": "/fijos"},
+        ))
+    return out
+
+
 def _fijos_sugeridos(db: Session, hoy: date) -> list[Hallazgo]:
     from app.services.fijos import sugeridos
     sug = sugeridos(db, hoy)
@@ -381,7 +399,7 @@ def hallazgos(db: Session, hoy: date | None = None, incluir_descartados: bool = 
     hoy = hoy or date.today()
     ult30 = gastos(db, hoy - timedelta(days=30), hoy)
     rec = recurrentes(db, hoy)
-    todos = (_duplicados(ult30) + _fijos_atrasados(db, hoy) + _fijos_sugeridos(db, hoy) + _garantias(db, hoy) + _aumentos(rec) + _plata_tirada(ult30, hoy)
+    todos = (_duplicados(ult30) + _fijos_atrasados(db, hoy) + _no_mensuales(db, hoy) + _fijos_sugeridos(db, hoy) + _garantias(db, hoy) + _aumentos(rec) + _plata_tirada(ult30, hoy)
              + _hormiga(ult30, hoy) + _desvios(db, hoy) + _sin_garantia(gastos(db, hoy - timedelta(days=30), hoy, incluir_cuotas=True)) + _fijos(rec)
              + _metas(db, hoy) + _inversiones(db, hoy))
     if not incluir_descartados:

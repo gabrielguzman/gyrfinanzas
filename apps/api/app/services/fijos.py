@@ -25,13 +25,53 @@ def dia_en(a: int, m: int, dia: int) -> date:
     return date(a, m, min(dia, calendar.monthrange(a, m)[1]))
 
 
+FRECUENCIAS = (1, 2, 3, 4, 6, 12)
+
+
+def _sumar_mes(a: int, m: int, n: int = 1) -> tuple[int, int]:
+    t = a * 12 + (m - 1) + n
+    return t // 12, t % 12 + 1
+
+
+def toca_en(f: GastoFijo, a: int, m: int) -> bool:
+    """¿Este fijo se paga en el mes (a, m)?"""
+    cada = f.cada_meses or 1
+    if cada <= 1:
+        return True
+    return (m - (f.mes_inicio or 1)) % cada == 0
+
+
+def por_mes(f: GastoFijo) -> Decimal:
+    """Lo que hay que apartar por mes: el monto entero si es mensual; si no, la parte."""
+    return (f.monto / (f.cada_meses or 1)).quantize(Decimal("1"))
+
+
+def ocurrencias(f: GastoFijo, desde: date, hasta: date) -> list[date]:
+    out, (a, m) = [], (desde.year, desde.month)
+    while date(a, m, 1) <= hasta:
+        if toca_en(f, a, m):
+            d = dia_en(a, m, f.dia)
+            if desde <= d <= hasta:
+                out.append(d)
+        a, m = _sumar_mes(a, m)
+    return out
+
+
 def proxima(f: GastoFijo, hoy: date) -> date:
-    """La próxima fecha en que toca (hoy incluido) si este mes todavía no se resolvió."""
-    este = dia_en(hoy.year, hoy.month, f.dia)
-    if f.ultimo_periodo != periodo(hoy) and este >= hoy:
-        return este
-    a, m = (hoy.year + 1, 1) if hoy.month == 12 else (hoy.year, hoy.month + 1)
-    return dia_en(a, m, f.dia)
+    """La próxima fecha en que toca (hoy incluido) que todavía no se resolvió."""
+    a, m = hoy.year, hoy.month
+    for _ in range(25):
+        if toca_en(f, a, m):
+            d = dia_en(a, m, f.dia)
+            if not (a == hoy.year and m == hoy.month and (f.ultimo_periodo == periodo(hoy) or d < hoy)):
+                return d
+        a, m = _sumar_mes(a, m)
+    return dia_en(*_sumar_mes(hoy.year, hoy.month), f.dia)
+
+
+def mes_inicial(dia: int, hoy: date) -> int:
+    """Si no dijiste en qué mes, el próximo en que cae ese día."""
+    return hoy.month if dia >= hoy.day else _sumar_mes(hoy.year, hoy.month)[1]
 
 
 def _clave(desc: str) -> str:
@@ -71,7 +111,7 @@ def generar(db: Session, hoy: date | None = None) -> list[Movimiento]:
     per = periodo(hoy)
     nuevos = []
     for f in db.scalars(select(GastoFijo).where(GastoFijo.activo.is_(True))):
-        if f.ultimo_periodo == per or f.monto <= 0:
+        if f.ultimo_periodo == per or f.monto <= 0 or not toca_en(f, hoy.year, hoy.month):
             continue
         fecha = dia_en(hoy.year, hoy.month, f.dia)
         if fecha > hoy:
@@ -163,7 +203,7 @@ def desde_detectado(db: Session, clave: str, activo: bool = True, hoy: date | No
 
 
 def nuevo(db: Session, *, nombre: str, monto: Decimal, dia: int, categoria_id=None, medio_pago_id=None,
-          hoy: date | None = None) -> GastoFijo:
+          cada_meses: int = 1, mes_inicio: int | None = None, hoy: date | None = None) -> GastoFijo:
     clave = _clave(nombre)
     f = db.scalar(select(GastoFijo).where(GastoFijo.clave == clave))
     if f is None:
@@ -171,9 +211,11 @@ def nuevo(db: Session, *, nombre: str, monto: Decimal, dia: int, categoria_id=No
         db.add(f)
     f.nombre, f.monto, f.dia, f.activo = nombre.strip(), monto, max(1, min(31, dia)), True
     f.categoria_id, f.medio_pago_id = categoria_id, medio_pago_id
-    db.flush()
     hoy = hoy or date.today()
-    if del_mes(db, f, hoy):
+    f.cada_meses = cada_meses if cada_meses in FRECUENCIAS else 1
+    f.mes_inicio = None if f.cada_meses == 1 else (mes_inicio or mes_inicial(f.dia, hoy))
+    db.flush()
+    if toca_en(f, hoy.year, hoy.month) and del_mes(db, f, hoy):
         f.ultimo_periodo = periodo(hoy)
     return f
 
@@ -194,3 +236,13 @@ def sugeridos(db: Session, hoy: date) -> list[Sugerido]:
     decididos = set(db.scalars(select(GastoFijo.clave)))
     return [Sugerido(r.clave, r.nombre, r.ultimo, r.ultima.day if r.ultima else 1, r.meses, r.categoria)
             for r in recurrentes_detectados(db, hoy) if r.clave not in decididos]
+
+
+def proximos_no_mensuales(db: Session, hoy: date, dias: int = 21) -> list[tuple[GastoFijo, date]]:
+    """Los que no son de todos los meses y se vienen pronto (para avisar antes)."""
+    out = []
+    for f in db.scalars(select(GastoFijo).where(GastoFijo.activo.is_(True), GastoFijo.cada_meses > 1)):
+        d = proxima(f, hoy)
+        if d <= hoy + timedelta(days=dias):
+            out.append((f, d))
+    return sorted(out, key=lambda x: x[1])

@@ -15,7 +15,7 @@ router = APIRouter(prefix="/fijos", tags=["fijos"])
 
 
 def _out(db: Session, f: GastoFijo, hoy: date) -> FijoOut:
-    mov = svc.del_mes(db, f, hoy)
+    mov = svc.del_mes(db, f, hoy) if svc.toca_en(f, hoy.year, hoy.month) else None
     if mov is not None:
         este_mes = "pagado" if mov.estado == EstadoMovimiento.confirmado else "en_bandeja"
     else:
@@ -23,6 +23,7 @@ def _out(db: Session, f: GastoFijo, hoy: date) -> FijoOut:
     c = f.categoria
     return FijoOut(
         id=f.id, nombre=f.nombre, clave=f.clave, monto=f.monto, dia=f.dia, activo=f.activo,
+        cada_meses=f.cada_meses or 1, mes_inicio=f.mes_inicio, por_mes=svc.por_mes(f),
         categoria_id=f.categoria_id, categoria=c.nombre if c else None,
         categoria_icono=c.icono if c else None, categoria_color=c.color if c else None,
         medio_pago_id=f.medio_pago_id, medio_pago=f.medio_pago.nombre if f.medio_pago else None,
@@ -34,13 +35,16 @@ def _out(db: Session, f: GastoFijo, hoy: date) -> FijoOut:
 def listar(db: Session = Depends(get_db)):
     hoy = date.today()
     svc.generar(db, hoy)
-    fijos = [_out(db, f, hoy) for f in svc.todos(db)]
+    modelos = svc.todos(db)
+    fijos = [_out(db, f, hoy) for f in modelos]
+    toca = {f.id for f in modelos if f.activo and svc.toca_en(f, hoy.year, hoy.month)}
     activos = [f for f in fijos if f.activo]
     return FijosOut(
         fijos=fijos,
         sugeridos=[FijoSugerido(**s.__dict__) for s in svc.sugeridos(db, hoy)],
-        total_mensual=sum((f.monto for f in activos), Decimal("0")),
-        pagado_mes=sum((f.monto for f in activos if f.este_mes == "pagado"), Decimal("0")),
+        total_mensual=sum((f.por_mes for f in activos), Decimal("0")),
+        este_mes_total=sum((f.monto for f in activos if f.id in toca), Decimal("0")),
+        pagado_mes=sum((f.monto for f in activos if f.id in toca and f.este_mes == "pagado"), Decimal("0")),
     )
 
 
@@ -77,6 +81,10 @@ def editar(fijo_id: uuid.UUID, datos: FijoPatch, db: Session = Depends(get_db)):
     _validar(db, cambios.get("categoria_id"), cambios.get("medio_pago_id"))
     for k, v in cambios.items():
         setattr(f, k, v.strip() if k == "nombre" else v)
+    if (f.cada_meses or 1) == 1:
+        f.mes_inicio = None
+    elif f.mes_inicio is None:
+        f.mes_inicio = svc.mes_inicial(f.dia, date.today())
     db.commit()
     if f.activo:
         svc.generar(db)

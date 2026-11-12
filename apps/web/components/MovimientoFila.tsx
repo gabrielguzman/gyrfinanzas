@@ -67,7 +67,10 @@ export function MovimientoFila({
             <span className="shrink-0 rounded-md bg-warn-soft px-1.5 py-0.5 text-[11px] font-bold text-warn-ink">por confirmar</span>
           )}
         </span>
-        <span className="truncate text-[13px] text-muted">{sub}</span>
+        <span className="truncate text-[13px] text-muted">
+          {sub}
+          {mov.etiquetas?.length > 0 && <span data-cat="pink" className="font-bold text-[var(--cat-fg)]"> {mov.etiquetas.map((t) => `#${t}`).join(" ")}</span>}
+        </span>
       </span>
       <span className={cx("num shrink-0 text-[15px] font-extrabold", ingreso && "text-ok", transfer && "text-muted")}>
         {monto(mov.monto, mov.moneda, ingreso ? "+" : transfer ? undefined : "-")}

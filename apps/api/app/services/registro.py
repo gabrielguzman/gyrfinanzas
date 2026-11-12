@@ -61,9 +61,14 @@ def _aprender(db: Session, r: Resultado) -> None:
 
 
 def interpretar_texto(db: Session, texto: str) -> Resultado:
+    from app.services import etiquetas as svc_et
     medios = list(db.scalars(select(MedioPago)))
     categorias = list(db.scalars(select(Categoria)))
-    r = interpretar(texto, medios, categorias)
+    limpio, tags, spans = svc_et.extraer(texto)
+    r = interpretar(limpio, medios, categorias)
+    activa = svc_et.activa(db)
+    r.etiquetas = tags + ([activa] if activa and activa not in tags else [])
+    r.partes = sorted(r.partes + [(a, b, "etiqueta") for a, b in spans])
     from app.services.reglas import categoria_para
     if r.deuda is None and (cat := categoria_para(db, texto, r.descripcion, tipo=r.tipo)):
         r.categoria = cat  # tus reglas mandan
@@ -150,6 +155,9 @@ def crear_desde_texto(db: Session, texto: str, origen: OrigenMovimiento) -> tupl
     db.flush()
     from app.services.fijos import absorber
     absorber(db, mov)
+    if r.etiquetas:
+        from app.services.etiquetas import asignar
+        asignar(db, mov, r.etiquetas)
     if r.garantia_meses:
         from app.services.garantias import nueva, producto_de
         nueva(db, producto=producto_de(mov), fecha_compra=mov.fecha, meses=r.garantia_meses, movimiento=mov)

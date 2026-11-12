@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { CalendarRange, FileText, HandCoins, Home, List, Monitor, Moon, Goal, Landmark, LogOut, Plus, Repeat, Settings, ShieldCheck, ShoppingBag, Sun, Target, Wallet } from "lucide-react";
+import { CalendarRange, Eye, EyeOff, FileText, Hash, HandCoins, Home, List, Monitor, Moon, Goal, Landmark, LogOut, Plus, Repeat, Settings, ShieldCheck, ShoppingBag, Sun, Target, Wallet } from "lucide-react";
 import { SWRConfig, useSWRConfig } from "swr";
 import { fetcher } from "@/lib/api";
 import { desvincularDispositivo } from "@/lib/push";
 import { vaciarCola, vincularCola } from "@/lib/cola";
-import { useTema, type Tema } from "@/lib/hooks";
+import { useDiscreto, useTema, type Tema } from "@/lib/hooks";
 import { CapturaSheet } from "./CapturaSheet";
 import { GarantiaSheet, type GarantiaAbierta } from "./Garantias";
 import { MovimientoSheet } from "./MovimientoSheet";
@@ -52,12 +52,13 @@ const NAV = [
   { href: "/garantias", label: "Garantías", Icon: ShieldCheck },
   { href: "/cuenta", label: "Tu cuenta", Icon: ShieldCheck },
   { href: "/fijos", label: "Gastos fijos", Icon: Repeat },
+  { href: "/etiquetas", label: "Etiquetas", Icon: Hash },
   { href: "/ajustes", label: "Ajustes", Icon: Settings },
 ] as const;
 // En el celu entran cuatro: Comprobantes y Garantías se abren desde Movimientos, Tu semana desde Inicio.
 // El plan se abre desde la tarjeta «Hoy podés gastar» de Inicio.
 // Metas y Patrimonio, desde Cuentas e Inicio.
-const NAV_CELU = NAV.filter((n) => !["/comprobantes", "/semana", "/garantias", "/plan", "/metas", "/patrimonio", "/comprar", "/cuenta", "/fijos", "/ajustes"].includes(n.href));
+const NAV_CELU = NAV.filter((n) => !["/comprobantes", "/semana", "/garantias", "/plan", "/metas", "/patrimonio", "/comprar", "/cuenta", "/fijos", "/ajustes", "/etiquetas"].includes(n.href));
 
 function activa(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -102,6 +103,7 @@ function Interior({ children }: { children: ReactNode }) {
   const [movId, setMovId] = useState<string | null>(null);
   const [garantia, setGarantia] = useState<GarantiaAbierta>(null);
   const [toast, setToast] = useState<Aviso | null>(null);
+  const [discretoOn, alternarDiscreto] = useDiscreto();
   const timer = useRef<number | undefined>(undefined);
 
   const refrescar = useCallback(() => {
@@ -137,9 +139,12 @@ function Interior({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (e.key === "n" && !e.metaKey && !e.ctrlKey && !["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) {
+      if (e.metaKey || e.ctrlKey || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || t.isContentEditable) return;
+      if (e.key === "n") {
         e.preventDefault();
         setCaptura(true);
+      } else if (e.key === "d") {
+        alternarDiscreto();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -184,12 +189,13 @@ function Interior({ children }: { children: ReactNode }) {
           </nav>
           <div className="mt-auto"><Salir /></div>
           <div className="flex items-center justify-between gap-2 px-2">
-            <span className="text-xs font-semibold text-faint">Tema</span>
+            <BotonDiscreto />
             <SelectorTema compacto />
           </div>
         </aside>
 
-        <main className="mx-auto w-full max-w-md px-5 pt-6 pb-32 lg:max-w-6xl lg:px-10 lg:pt-10 lg:pb-16">
+        {/* Al prender/apagar el modo discreto se vuelve a dibujar la página (los datos siguen en caché) */}
+        <main key={discretoOn ? "discreto" : "normal"} className="mx-auto w-full max-w-md px-5 pt-6 pb-32 lg:max-w-6xl lg:px-10 lg:pt-10 lg:pb-16">
           <div className="mb-4 flex justify-end lg:hidden"><Link href="/cuenta" className="press rounded-xl px-3 py-2 text-sm font-bold text-muted">Tu cuenta</Link></div>
           {children}
         </main>
@@ -271,6 +277,17 @@ function TabLink({ href, label, activo, Icon }: { href: string; label: string; a
 }
 
 export { SelectorTema };
+
+/** Ojo para ocultar/mostrar los montos (modo discreto). */
+export function BotonDiscreto({ className }: { className?: string }) {
+  const [on, alternar] = useDiscreto();
+  return (
+    <button onClick={alternar} aria-pressed={on} aria-label={on ? "Mostrar montos" : "Ocultar montos"} title={on ? "Mostrar montos" : "Ocultar montos (D)"}
+      className={cx("press flex h-10 w-10 shrink-0 items-center justify-center rounded-full", on ? "bg-ink text-ground" : "bg-surface-2 text-muted", className)}>
+      {on ? <EyeOff size={18} /> : <Eye size={18} />}
+    </button>
+  );
+}
 
 export function Salir() {
   const [requiere, setRequiere] = useState(false);

@@ -1,3 +1,4 @@
+import uuid
 from datetime import date
 from decimal import Decimal
 
@@ -89,7 +90,7 @@ def test_api_manual_saltear_y_plan(client, base):
     f = r.json()
     assert f["este_mes"] == "en_bandeja"  # el día 1 ya pasó (o es hoy): está en la bandeja
     lista = client.get("/fijos").json()
-    assert lista["total_mensual"] == "450000.00"
+    assert lista["total_mensual"] == "450000"
     assert [x["nombre"] for x in lista["fijos"]] == ["Alquiler"]
     # Cuenta en el plan como fijo aunque no haya pagos anteriores
     db = _db(client)
@@ -101,3 +102,38 @@ def test_api_manual_saltear_y_plan(client, base):
     assert not [m for m in pend if m["descripcion"] == "Alquiler"]
     assert client.delete(f"/fijos/{f['id']}").status_code == 204
     assert client.get("/fijos").json()["total_mensual"] == "0"
+
+
+def test_no_mensuales(client, base):
+    from app.services.plan import calendario
+    db = _db(client)
+    f = svc.nuevo(db, nombre="Patente", monto=Decimal("90000"), dia=10, cada_meses=2, mes_inicio=12,
+                  medio_pago_id=uuid.UUID(base["medios"]["debito"]["id"]), hoy=HOY)
+    db.commit()
+    assert svc.por_mes(f) == Decimal("45000")
+    assert svc.proxima(f, HOY) == date(2026, 12, 10)
+    assert svc.ocurrencias(f, HOY, date(2027, 6, 30)) == [date(2026, 12, 10), date(2027, 2, 10), date(2027, 4, 10), date(2027, 6, 10)]
+    # Noviembre no toca; diciembre sí
+    assert svc.generar(db, HOY) == []
+    assert len(svc.generar(db, date(2026, 12, 10))) == 1
+    # En el plan cuenta lo que hay que apartar por mes
+    r = [x for x in recurrentes(db, HOY) if x.nombre == "Patente"][0]
+    assert (r.ultimo, r.cada_meses, r.monto_total) == (Decimal("45000"), 2, Decimal("90000.00"))
+    # Aviso unas semanas antes
+    hs = {h.tipo: h for h in hallazgos(db, date(2026, 11, 25))}
+    assert hs["no_mensual"].titulo == "Patente: es en 15 días"
+    assert "no_mensual" not in {h.tipo for h in hallazgos(db, HOY)}
+    # En el calendario aparece entero en su fecha
+    client.put("/plan/ajustes", json={"dia_cobro": 1, "ingreso_mensual": "900000"})
+    ev = [e for e in calendario(db, HOY, 40).eventos if e.titulo == "Patente"]
+    assert [(e.fecha, e.monto) for e in ev] == [(date(2026, 12, 10), Decimal("-90000.00"))]
+
+
+def test_api_frecuencia(client, base):
+    r = client.post("/fijos", json={"nombre": "Seguro", "monto": "120000", "dia": 20, "cada_meses": 12}).json()
+    assert r["cada_meses"] == 12 and r["mes_inicio"] in range(1, 13) and r["por_mes"] == "10000"
+    l = client.get("/fijos").json()
+    assert l["total_mensual"] == "10000"
+    r = client.patch(f"/fijos/{r['id']}", json={"cada_meses": 1}).json()
+    assert r["mes_inicio"] is None and r["por_mes"] == "120000"
+    assert client.post("/fijos", json={"nombre": "X", "monto": "1", "dia": 1, "cada_meses": 5}).status_code == 422

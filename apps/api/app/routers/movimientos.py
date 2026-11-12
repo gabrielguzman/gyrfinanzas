@@ -34,6 +34,7 @@ _CARGAS = (
     selectinload(Movimiento.cuenta_destino),
     selectinload(Movimiento.adjuntos).selectinload(MovimientoAdjunto.archivo),
     selectinload(Movimiento.garantias),
+    selectinload(Movimiento.etiquetas),
 )
 
 
@@ -56,7 +57,7 @@ def serializar(m: Movimiento) -> MovimientoOut:
         cuenta_destino_id=m.cuenta_destino_id,
         cuenta_destino=m.cuenta_destino.nombre if m.cuenta_destino else None,
         adjuntos=adjuntos, tiene_comprobante=bool(adjuntos), valio=m.valio, deuda_id=m.deuda_id, creado=m.creado,
-        cuotas=m.cuotas, fijo_id=m.fijo_id,
+        cuotas=m.cuotas, fijo_id=m.fijo_id, etiquetas=sorted(e.nombre for e in m.etiquetas),
     )
 
 
@@ -76,6 +77,7 @@ def listar(
     desde: date | None = None,
     hasta: date | None = None,
     sin_comprobante: bool = False,
+    etiqueta: str | None = Query(default=None, max_length=60),
     q: str | None = Query(default=None, max_length=100),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -101,6 +103,11 @@ def listar(
             Movimiento.tipo != TipoMovimiento.transferencia,
             ~exists().where(MovimientoAdjunto.movimiento_id == Movimiento.id),
         )
+    if etiqueta:
+        from app.models import Etiqueta, MovimientoEtiqueta
+        consulta = consulta.where(exists().where(
+            MovimientoEtiqueta.movimiento_id == Movimiento.id, MovimientoEtiqueta.etiqueta_id == Etiqueta.id,
+            Etiqueta.nombre == etiqueta.lstrip("#").lower()))
     if q:
         consulta = consulta.where(Movimiento.descripcion.ilike(f"%{q}%"))
     consulta = consulta.order_by(Movimiento.fecha.desc(), Movimiento.creado.desc()).limit(limit).offset(offset)
@@ -109,7 +116,10 @@ def listar(
 
 @router.post("", response_model=MovimientoOut, status_code=201)
 def crear(datos: MovimientoIn, db: Session = Depends(get_db)):
-    mov = Movimiento(**datos.model_dump())
+    from app.services import etiquetas as svc_et
+    valores = datos.model_dump()
+    etiquetas = valores.pop("etiquetas", None)
+    mov = Movimiento(**valores)
     if mov.categoria_id is None and mov.tipo != TipoMovimiento.transferencia and not mov.deuda_id:
         from app.services.reglas import categoria_para
         if cat := categoria_para(db, mov.descripcion, tipo=mov.tipo):
@@ -119,6 +129,9 @@ def crear(datos: MovimientoIn, db: Session = Depends(get_db)):
     resolver(db, mov, confirmar=mov.estado == EstadoMovimiento.confirmado)
     db.add(mov)
     db.flush()
+    activa = svc_et.activa(db)
+    if etiquetas or activa:
+        svc_et.asignar(db, mov, (etiquetas or []) + ([activa] if activa and etiquetas is None else []))
     svc_fijos.absorber(db, mov)
     if mov.estado == EstadoMovimiento.confirmado:
         plan_desde_movimiento(db, mov)  # compra en cuotas con tarjeta → su plan
@@ -135,7 +148,11 @@ def detalle(mov_id: uuid.UUID, db: Session = Depends(get_db)):
 @router.patch("/{mov_id}", response_model=MovimientoOut)
 def editar(mov_id: uuid.UUID, datos: MovimientoPatch, db: Session = Depends(get_db)):
     mov = _cargar(db, mov_id)
-    for k, v in datos.model_dump(exclude_unset=True).items():
+    cambios = datos.model_dump(exclude_unset=True)
+    if "etiquetas" in cambios:
+        from app.services.etiquetas import asignar
+        asignar(db, mov, cambios.pop("etiquetas") or [])
+    for k, v in cambios.items():
         setattr(mov, k, v)
     if mov.cuotas == 1:
         mov.cuotas = None

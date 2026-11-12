@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import Link from "next/link";
-import { CheckSquare, Download, FileText, ShieldCheck, Plus, Search, Tags, X } from "lucide-react";
+import { CheckSquare, Download, Hash, FileText, ShieldCheck, Plus, Search, Tags, X } from "lucide-react";
 import { ExportarPanel } from "@/components/Exportar";
 import { CategoriaPicker } from "@/components/Selectores";
 import { Sheet } from "@/components/Sheet";
@@ -98,6 +98,7 @@ function Lista_() {
           { label: "Exportar", Icon: Download, onClick: () => setExportar(true) },
           { label: "Boletas", Icon: FileText, href: "/comprobantes" },
           { label: "Garantías", Icon: ShieldCheck, href: "/garantias" },
+          { label: "Etiquetas", Icon: Hash, href: "/etiquetas" },
         ].map(({ label, Icon, onClick, href, activo }) => {
           const cls = cx("press flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-bold",
             activo ? "border-ink bg-ink text-ground" : "border-line-strong bg-surface");

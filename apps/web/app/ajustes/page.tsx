@@ -14,7 +14,8 @@ const PREFS: { k: keyof Omit<PrefsAvisos, "notif_hora">; titulo: string; detalle
   { k: "notif_hoy", titulo: "Cuánto podés gastar hoy", detalle: "Todas las mañanas, a la hora que elijas" },
   { k: "notif_fijos", titulo: "Gastos fijos", detalle: "El día que toca el alquiler, internet o una suscripción" },
   { k: "notif_vencimientos", titulo: "Vencimientos", detalle: "El día antes y el día que vence una tarjeta o un préstamo" },
-  { k: "notif_avisos", titulo: "Avisos importantes", detalle: "Garantías por vencer, fijos sin confirmar, plazos fijos" },
+  { k: "notif_avisos", titulo: "Avisos importantes", detalle: "Garantías por vencer, fijos sin confirmar, patente o seguro que se viene" },
+  { k: "notif_racha", titulo: "Recordatorio de la noche", detalle: "A las 21, si ese día todavía no cargaste nada" },
 ];
 
 function Interruptor({ activo, onCambio, label }: { activo: boolean; onCambio: (v: boolean) => void; label: string }) {

@@ -3,15 +3,17 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import useSWR from "swr";
-import { CalendarRange, CloudOff, CreditCard, HandCoins, Paperclip, Plus, Sparkles, TrendingDown } from "lucide-react";
+import { CalendarRange, CloudOff, CreditCard, HandCoins, Hash, Paperclip, Plus, Sparkles, TrendingDown } from "lucide-react";
 import { HallazgoFila } from "@/components/Hallazgos";
 import { BandejaItem } from "@/components/BandejaItem";
 import { CategoriasBarras, RitmoChart } from "@/components/Graficos";
 import { MovimientoFila } from "@/components/MovimientoFila";
 import { HoyCard } from "@/components/Plan";
 import { Anillo } from "@/components/Metas";
-import { SelectorTema, useApp } from "@/components/Shell";
+import { BotonDiscreto, SelectorTema, useApp } from "@/components/Shell";
+import { RachaCard } from "@/components/Racha";
 import { Boton, Esqueleto, Lista, Seccion, Vacio } from "@/components/ui";
+import { api, type Etiquetas } from "@/lib/api";
 import type { CalendarioPlan, Meta, Cuenta, Deuda, Hallazgo, Inicio, Movimiento, Presupuesto, Resumen, Tarjeta } from "@/lib/api";
 import { cantidadEnCola } from "@/lib/cola";
 import { fechaCorta, MESES, monto, nombrePeriodo } from "@/lib/format";
@@ -130,6 +132,18 @@ function proyeccion(r: Resumen): string | null {
   return `A este ritmo cerrarías el mes cerca de ${monto(Math.round(p / 1000) * 1000)}.`;
 }
 
+function EtiquetaActiva({ nombre, onApagar }: { nombre: string; onApagar: () => void }) {
+  return (
+    <div data-cat="pink" className="-mt-3 flex items-center gap-3 rounded-[20px] bg-[var(--cat-bg)] p-3 pl-4 text-[var(--cat-fg)]">
+      <Hash size={18} className="shrink-0" />
+      <span className="min-w-0 flex-1 text-sm font-semibold">
+        <Link href={`/etiquetas/${nombre}`} className="font-extrabold underline-offset-2 hover:underline">#{nombre}</Link> está activa: todo lo que cargues la lleva.
+      </span>
+      <button onClick={onApagar} className="press min-h-9 shrink-0 rounded-xl bg-surface px-3 text-[13px] font-bold text-ink">Apagar</button>
+    </div>
+  );
+}
+
 export default function InicioPage() {
   const { abrirCaptura } = useApp();
   const { data: inicio, error } = useSWR<Inicio>("/inicio");
@@ -143,6 +157,7 @@ export default function InicioPage() {
   const { data: plan } = useSWR<Presupuesto>("/plan");
   const { data: metas } = useSWR<Meta[]>("/metas");
   const { data: calendario } = useSWR<CalendarioPlan>(plan?.configurado ? "/plan/calendario" : null);
+  const { data: etiquetas, mutate: mutarEtiquetas } = useSWR<Etiquetas>("/etiquetas");
   const [enCola, setEnCola] = useState(0);
   useEffect(() => setEnCola(cantidadEnCola()), [inicio]);
 
@@ -176,12 +191,15 @@ export default function InicioPage() {
     <div className="flex flex-col gap-7">
       <header className="flex items-center justify-between">
         <span className="text-sm font-semibold text-muted">{saludo}</span>
-        <div className="lg:hidden"><SelectorTema compacto /></div>
+        <div className="flex items-center gap-2 lg:hidden"><BotonDiscreto /><SelectorTema compacto /></div>
       </header>
+
+      {etiquetas?.activa && <EtiquetaActiva nombre={etiquetas.activa} onApagar={async () => { await api.put("/etiquetas/activa", { nombre: null }); mutarEtiquetas(); }} />}
 
       <div className="grid grid-cols-1 gap-7 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-start lg:gap-10">
         <div className="flex min-w-0 flex-col gap-7">
           <HoyCard p={plan} cal={calendario} />
+          <RachaCard />
           {inicio ? <Disponible inicio={inicio} /> : <Esqueleto className="h-[260px] rounded-[28px]" />}
           {tarjetas && deudas && <Avisos tarjetas={tarjetas} deudas={deudas} />}
 

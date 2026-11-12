@@ -27,6 +27,7 @@ PREFS = {
     "notif_fijos": "Gastos fijos el día que tocan",
     "notif_vencimientos": "Vencimientos de tarjetas y préstamos",
     "notif_avisos": "Avisos importantes (garantías, fijos sin confirmar, plazos fijos)",
+    "notif_racha": "A la noche, si todavía no cargaste nada ese día",
 }
 HORA_DEFECTO = "09:00"
 
@@ -179,9 +180,17 @@ def calcular(db: Session, ahora: datetime) -> list[Aviso]:
             out.append(Aviso(f"venc:{e.titulo}:{e.fecha}", f"Vence {cuando} {nombre}",
                              f"Son {_pesos(e.monto)}{' (estimado)' if e.estimado else ''}.", "/deudas"))
 
+    if prefs["notif_racha"] and ahora.hour >= 21 and not ya(f"racha:{hoy}"):
+        from app.services import racha as svc_racha
+        r = svc_racha.calcular(db, hoy)
+        if r.hoy == "vacio":
+            titulo = f"No cortes tu racha de {r.actual} días" if r.actual >= 2 else "¿Cargaste lo de hoy?"
+            out.append(Aviso(f"racha:{hoy}", titulo,
+                             "Si gastaste algo, anotalo ahora que te acordás. Si no, marcá «Hoy no gasté nada».", "/"))
+
     if prefs["notif_avisos"]:
         for h in detectores.hallazgos(db, hoy):
-            if h.tipo in ("garantia", "fijo_atrasado", "inversion", "duplicado") and h.tono == "aviso":
+            if h.tipo in ("garantia", "fijo_atrasado", "inversion", "duplicado", "no_mensual") and h.tono == "aviso":
                 out.append(Aviso(f"h:{h.clave}", h.titulo, h.detalle, "/"))
     return out
 

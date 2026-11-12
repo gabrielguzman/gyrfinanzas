@@ -3,10 +3,16 @@ import type { Moneda } from "./api";
 const nf = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 });
 const nf2 = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** Modo discreto (ver useDiscreto): los montos se muestran como «$ •••••». */
+export function discreto(): boolean {
+  return typeof document !== "undefined" && document.documentElement.classList.contains("discreto");
+}
+
 export function monto(valor: string | number, moneda: Moneda = "ARS", signo?: "+" | "-"): string {
   const n = Math.abs(Number(valor));
   const prefijo = moneda === "USD" ? "USD " : "$ ";
   const s = signo === "+" ? "+ " : signo === "-" ? "− " : Number(valor) < 0 ? "− " : "";
+  if (discreto()) return `${s}${prefijo}•••••`;
   const conCentavos = Math.round(n * 100) % 100 !== 0;
   return `${s}${prefijo}${(conCentavos ? nf2 : nf).format(n)}`;
 }
@@ -29,6 +35,7 @@ export function etiquetaDia(iso: string): string {
 
 /** Montos grandes abreviados para gráficos: $ 1,2 M · $ 85 mil */
 export function compacto(valor: number): string {
+  if (discreto()) return "$ •••";
   const n = Math.abs(valor);
   if (n >= 1_000_000) return `$ ${(n / 1_000_000).toLocaleString("es-AR", { maximumFractionDigits: 1 })} M`;
   if (n >= 10_000) return `$ ${Math.round(n / 1000).toLocaleString("es-AR")} mil`;

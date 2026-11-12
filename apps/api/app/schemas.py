@@ -138,6 +138,7 @@ class MovimientoIn(BaseModel):
     cuenta_id: uuid.UUID | None = None
     cuenta_destino_id: uuid.UUID | None = None
     cuotas: int | None = Field(default=None, ge=1, le=72)
+    etiquetas: list[str] | None = Field(default=None, max_length=20)
     # Lo cargado a mano entra confirmado; la captura automática entra pendiente.
     estado: EstadoMovimiento = EstadoMovimiento.confirmado
 
@@ -153,6 +154,7 @@ class MovimientoPatch(BaseModel):
     cuenta_id: uuid.UUID | None = None
     cuenta_destino_id: uuid.UUID | None = None
     cuotas: int | None = Field(default=None, ge=1, le=72)
+    etiquetas: list[str] | None = Field(default=None, max_length=20)
 
 
 class MovimientoOut(BaseModel):
@@ -181,6 +183,7 @@ class MovimientoOut(BaseModel):
     deuda_id: uuid.UUID | None = None
     cuotas: int | None = None
     fijo_id: uuid.UUID | None = None
+    etiquetas: list[str] = []
     garantia: "GarantiaMini | None" = None
     creado: datetime
 
@@ -231,6 +234,7 @@ class Interpretacion(BaseModel):
     deuda_nombre: str | None = None
     garantia_meses: int | None = None
     aviso: str | None = None
+    etiquetas: list[str] = []
     # Partes del texto reconocidas, para resaltarlas mientras escribís.
     partes: list["Parte"] = []
     # Por qué se eligió el medio de pago ("dijiste «visa»"), para mostrar en la UI.
@@ -887,6 +891,9 @@ class FijoOut(BaseModel):
     clave: str
     monto: Decimal
     dia: int
+    cada_meses: int
+    mes_inicio: int | None
+    por_mes: Decimal
     activo: bool
     categoria_id: uuid.UUID | None
     categoria: str | None
@@ -912,7 +919,8 @@ class FijoSugerido(BaseModel):
 class FijosOut(BaseModel):
     fijos: list[FijoOut]
     sugeridos: list[FijoSugerido]
-    total_mensual: Decimal
+    total_mensual: Decimal          # lo que hay que apartar por mes (los no mensuales, prorrateados)
+    este_mes_total: Decimal         # lo que toca pagar este mes
     pagado_mes: Decimal
 
 
@@ -920,6 +928,8 @@ class FijoIn(BaseModel):
     nombre: str = Field(min_length=1, max_length=120)
     monto: Decimal = Field(gt=0)
     dia: int = Field(ge=1, le=31)
+    cada_meses: Literal[1, 2, 3, 4, 6, 12] = 1
+    mes_inicio: int | None = Field(default=None, ge=1, le=12)
     categoria_id: uuid.UUID | None = None
     medio_pago_id: uuid.UUID | None = None
 
@@ -928,6 +938,8 @@ class FijoPatch(BaseModel):
     nombre: str | None = Field(default=None, min_length=1, max_length=120)
     monto: Decimal | None = Field(default=None, gt=0)
     dia: int | None = Field(default=None, ge=1, le=31)
+    cada_meses: Literal[1, 2, 3, 4, 6, 12] | None = None
+    mes_inicio: int | None = Field(default=None, ge=1, le=12)
     categoria_id: uuid.UUID | None = None
     medio_pago_id: uuid.UUID | None = None
     activo: bool | None = None

@@ -63,10 +63,12 @@ export interface Movimiento {
   deuda_id: string | null;
   cuotas: number | null;
   fijo_id: string | null;
+  etiquetas: string[];
   garantia: { id: string; vence: string; estado: EstadoGarantia; dias_restantes: number } | null;
   creado: string;
 }
 export interface Interpretacion {
+  etiquetas: string[];
   tipo: TipoMov;
   monto: string | null;
   moneda: Moneda;
@@ -419,6 +421,9 @@ export interface Fijo {
   clave: string;
   monto: string;
   dia: number;
+  cada_meses: number;
+  mes_inicio: number | null;
+  por_mes: string;
   activo: boolean;
   categoria_id: string | null;
   categoria: string | null;
@@ -442,6 +447,7 @@ export interface Fijos {
   fijos: Fijo[];
   sugeridos: FijoSugerido[];
   total_mensual: string;
+  este_mes_total: string;
   pagado_mes: string;
 }
 export interface Regla {
@@ -469,12 +475,35 @@ export interface PrefsAvisos {
   notif_fijos: boolean;
   notif_vencimientos: boolean;
   notif_avisos: boolean;
+  notif_racha: boolean;
   notif_hora: string;
 }
 export interface EstadoAvisos {
   clave_publica: string;
   dispositivos: number;
   preferencias: PrefsAvisos;
+}
+
+export interface EtiquetaResumen {
+  id: string;
+  nombre: string;
+  total: string;
+  total_usd: string;
+  cantidad: number;
+  desde: string | null;
+  hasta: string | null;
+  activa: boolean;
+  por_categoria: { nombre: string; icono: string; color: string; total: string }[];
+}
+export interface Etiquetas {
+  activa: string | null;
+  etiquetas: EtiquetaResumen[];
+}
+export interface Racha {
+  actual: number;
+  mejor: number;
+  hoy: "cargado" | "sin_gastos" | "vacio";
+  dias: { fecha: string; estado: "cargado" | "sin_gastos" | "vacio" }[];
 }
 
 export function apiBase(): string {

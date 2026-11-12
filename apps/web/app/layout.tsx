@@ -30,7 +30,7 @@ export const viewport: Viewport = {
 };
 
 // Aplica el tema elegido antes de pintar, para que no parpadee.
-const temaInicial = `try{var t=localStorage.getItem("gyr-tema");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;
+const temaInicial = `try{var t=localStorage.getItem("gyr-tema");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("gyr-discreto")==="1")document.documentElement.classList.add("discreto")}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import auth, accounts
 from app.config import settings
-from app.routers import archivos, captura, categorias, cuentas, inicio, medios_pago, movimientos, resumen, semana, tarjetas, deudas, garantias, plan, metas, patrimonio, compra, fijos, reglas, exportar, avisos
+from app.routers import archivos, captura, categorias, cuentas, inicio, medios_pago, movimientos, resumen, semana, tarjetas, deudas, garantias, plan, metas, patrimonio, compra, fijos, reglas, exportar, avisos, etiquetas, racha
 
 def _pasada() -> None:
     from sqlalchemy import select
@@ -63,7 +63,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(accounts.router)
-for r in (inicio, resumen, captura, movimientos, cuentas, medios_pago, categorias, archivos, tarjetas, deudas, semana, garantias, plan, metas, patrimonio, compra, fijos, reglas, exportar, avisos):
+for r in (inicio, resumen, captura, movimientos, cuentas, medios_pago, categorias, archivos, tarjetas, deudas, semana, garantias, plan, metas, patrimonio, compra, fijos, reglas, exportar, avisos, etiquetas, racha):
     app.include_router(r.router)
 
 
