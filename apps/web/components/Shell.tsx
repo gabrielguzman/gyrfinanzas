@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { CalendarRange, Eye, EyeOff, FileText, Hash, HandCoins, Home, List, Monitor, Moon, Goal, Landmark, LogOut, Plus, Repeat, Settings, ShieldCheck, ShoppingBag, Sun, Target, Wallet } from "lucide-react";
+import { CalendarRange, Eye, EyeOff, FileText, Hash, HandCoins, Home, List, Monitor, Moon, Goal, Landmark, LogOut, Plus, Repeat, Settings, ShieldCheck, ShoppingBag, Sun, Target, UserRound, Wallet } from "lucide-react";
 import { SWRConfig, useSWRConfig } from "swr";
 import { fetcher } from "@/lib/api";
 import { desvincularDispositivo } from "@/lib/push";
@@ -38,23 +38,44 @@ export function useApp(): Ctx {
   return c;
 }
 
-const NAV = [
-  { href: "/", label: "Inicio", Icon: Home },
-  { href: "/plan", label: "Hasta el cobro", Icon: Target },
-  { href: "/comprar", label: "¿Me lo compro?", Icon: ShoppingBag },
-  { href: "/movimientos", label: "Movimientos", Icon: List },
-  { href: "/cuentas", label: "Cuentas", Icon: Wallet },
-  { href: "/deudas", label: "Deudas", Icon: HandCoins },
-  { href: "/metas", label: "Metas", Icon: Goal },
-  { href: "/patrimonio", label: "Patrimonio", Icon: Landmark },
-  { href: "/semana", label: "Tu semana", Icon: CalendarRange },
-  { href: "/comprobantes", label: "Comprobantes", Icon: FileText },
-  { href: "/garantias", label: "Garantías", Icon: ShieldCheck },
-  { href: "/cuenta", label: "Tu cuenta", Icon: ShieldCheck },
-  { href: "/fijos", label: "Gastos fijos", Icon: Repeat },
-  { href: "/etiquetas", label: "Etiquetas", Icon: Hash },
+type ItemNav = { href: string; label: string; Icon: typeof Home };
+
+/** Menú de la compu, en grupos. Si no entra en la pantalla, solo la lista scrollea. */
+const GRUPOS: { titulo: string | null; items: ItemNav[] }[] = [
+  {
+    titulo: null,
+    items: [
+      { href: "/", label: "Inicio", Icon: Home },
+      { href: "/movimientos", label: "Movimientos", Icon: List },
+      { href: "/plan", label: "Hasta el cobro", Icon: Target },
+      { href: "/comprar", label: "¿Me lo compro?", Icon: ShoppingBag },
+    ],
+  },
+  {
+    titulo: "Tu plata",
+    items: [
+      { href: "/cuentas", label: "Cuentas", Icon: Wallet },
+      { href: "/deudas", label: "Deudas", Icon: HandCoins },
+      { href: "/fijos", label: "Gastos fijos", Icon: Repeat },
+      { href: "/metas", label: "Metas", Icon: Goal },
+      { href: "/patrimonio", label: "Patrimonio", Icon: Landmark },
+    ],
+  },
+  {
+    titulo: "Para revisar",
+    items: [
+      { href: "/semana", label: "Tu semana", Icon: CalendarRange },
+      { href: "/etiquetas", label: "Etiquetas", Icon: Hash },
+      { href: "/comprobantes", label: "Comprobantes", Icon: FileText },
+      { href: "/garantias", label: "Garantías", Icon: ShieldCheck },
+    ],
+  },
+];
+const NAV: ItemNav[] = [
+  ...GRUPOS.flatMap((g) => g.items),
+  { href: "/cuenta", label: "Tu cuenta", Icon: UserRound },
   { href: "/ajustes", label: "Ajustes", Icon: Settings },
-] as const;
+];
 // En el celu entran cuatro: Comprobantes y Garantías se abren desde Movimientos, Tu semana desde Inicio.
 // El plan se abre desde la tarjeta «Hoy podés gastar» de Inicio.
 // Metas y Patrimonio, desde Cuentas e Inicio.
@@ -157,41 +178,44 @@ function Interior({ children }: { children: ReactNode }) {
     <AppCtx.Provider value={ctx}>
       <div className="lg:flex">
         {/* Menú lateral (compu) */}
-        <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col gap-6 border-r border-line px-5 py-7 lg:flex">
-          <Link href="/" className="display flex items-center gap-2.5 px-2 text-[22px] font-bold">
-            <img src="/icons/icon-192.png" alt="" width={30} height={30} className="rounded-[9px]" />
-            gyrfinanzas
-          </Link>
-          <button
-            onClick={() => setCaptura(true)}
-            className="press flex min-h-12 items-center justify-between rounded-2xl bg-accent px-4 font-bold text-accent-ink"
-          >
-            <span className="flex items-center gap-2">
-              <Plus size={20} strokeWidth={2.6} /> Cargar
-            </span>
-            <kbd className="rounded-md bg-white/20 px-1.5 text-xs font-bold">N</kbd>
-          </button>
-          <nav className="flex flex-col gap-1">
-            {NAV.map(({ href, label, Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                aria-current={activa(pathname, href) ? "page" : undefined}
-                className={cx(
-                  "press flex min-h-11 items-center gap-3 rounded-xl px-3 text-[15px] font-bold",
-                  activa(pathname, href) ? "bg-surface text-ink shadow-soft" : "text-muted hover:bg-surface-2"
-                )}
-              >
-                <Icon size={19} />
-                {label}
-              </Link>
+        <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line lg:flex">
+          <div className="flex flex-col gap-4 px-4 pt-6 pb-3">
+            <Link href="/" className="display flex items-center gap-2.5 px-2 text-[21px] font-bold">
+              <img src="/icons/icon-192.png" alt="" width={28} height={28} className="rounded-[8px]" />
+              gyrfinanzas
+            </Link>
+            <button
+              onClick={() => setCaptura(true)}
+              className="press flex min-h-11 items-center justify-between rounded-2xl bg-accent px-4 font-bold text-accent-ink"
+            >
+              <span className="flex items-center gap-2">
+                <Plus size={19} strokeWidth={2.6} /> Cargar
+              </span>
+              <kbd className="rounded-md bg-white/20 px-1.5 text-xs font-bold">N</kbd>
+            </button>
+          </div>
+          <nav className="menu-scroll flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-1" aria-label="Menú">
+            {GRUPOS.map((g) => (
+              <div key={g.titulo ?? "principal"} className="flex flex-col gap-0.5">
+                {g.titulo && <span className="px-3 pt-1 pb-1 text-[11px] font-bold tracking-wide text-faint uppercase">{g.titulo}</span>}
+                {g.items.map(({ href, label, Icon }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-current={activa(pathname, href) ? "page" : undefined}
+                    className={cx(
+                      "press flex min-h-9 items-center gap-3 rounded-xl px-3 text-[14px] font-bold",
+                      activa(pathname, href) ? "bg-surface text-ink shadow-soft" : "text-muted hover:bg-surface-2 hover:text-ink"
+                    )}
+                  >
+                    <Icon size={18} className="shrink-0" />
+                    <span className="truncate">{label}</span>
+                  </Link>
+                ))}
+              </div>
             ))}
           </nav>
-          <div className="mt-auto"><Salir /></div>
-          <div className="flex items-center justify-between gap-2 px-2">
-            <BotonDiscreto />
-            <SelectorTema compacto />
-          </div>
+          <PieMenu pathname={pathname} />
         </aside>
 
         {/* Al prender/apagar el modo discreto se vuelve a dibujar la página (los datos siguen en caché) */}
@@ -286,6 +310,48 @@ export function BotonDiscreto({ className }: { className?: string }) {
       className={cx("press flex h-10 w-10 shrink-0 items-center justify-center rounded-full", on ? "bg-ink text-ground" : "bg-surface-2 text-muted", className)}>
       {on ? <EyeOff size={18} /> : <Eye size={18} />}
     </button>
+  );
+}
+
+/** Abajo del menú, siempre visible: tu cuenta, ajustes, salir, ocultar montos y tema. */
+function PieMenu({ pathname }: { pathname: string }) {
+  const [requiere, setRequiere] = useState(false);
+  useEffect(() => {
+    fetch("/api/auth/estado").then((r) => r.json()).then((e) => setRequiere(!!e.requiere)).catch(() => {});
+  }, []);
+  const item = (href: string, label: string, Icon: typeof Home) => (
+    <Link
+      href={href}
+      aria-current={activa(pathname, href) ? "page" : undefined}
+      className={cx(
+        "press flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-xl px-3 text-[13px] font-bold",
+        activa(pathname, href) ? "bg-surface text-ink shadow-soft" : "text-muted hover:bg-surface-2 hover:text-ink"
+      )}
+    >
+      <Icon size={17} className="shrink-0" /> <span className="truncate">{label}</span>
+    </Link>
+  );
+  return (
+    <div className="flex flex-col gap-2 border-t border-line px-4 pt-3 pb-5">
+      <div className="flex items-center gap-1">
+        {requiere && item("/cuenta", "Tu cuenta", UserRound)}
+        {item("/ajustes", "Ajustes", Settings)}
+        {requiere && (
+          <button
+            aria-label="Salir"
+            title="Salir"
+            onClick={async () => { await desvincularDispositivo().catch(() => {}); await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/entrar"; }}
+            className="press flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-surface-2 hover:text-ink"
+          >
+            <LogOut size={17} />
+          </button>
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-2 px-1">
+        <BotonDiscreto />
+        <SelectorTema compacto />
+      </div>
+    </div>
   );
 }
 

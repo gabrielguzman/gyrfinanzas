@@ -189,6 +189,15 @@ body { font-feature-settings: "ss01"; }
 }
 
 .no-scrollbar { scrollbar-width: none; }
+/* El menú de la compu: scroll fino, que aparece solo cuando hace falta */
+.menu-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  /* Un leve desvanecido abajo avisa que hay más opciones */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  padding-bottom: 28px;
+}
+.menu-scroll:hover { scrollbar-color: var(--line-strong) transparent; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 
