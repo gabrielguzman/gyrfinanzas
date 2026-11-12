@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import useSWR from "swr";
 import { CalendarDays } from "lucide-react";
 import type { Categoria, MedioPago } from "@/lib/api";
@@ -77,6 +77,7 @@ export function FechaChips({ valor, onCambio }: { valor: string; onCambio: (iso:
   ];
   const otra = !opciones.some((o) => o.iso === valor);
   const ref = useRef<HTMLInputElement>(null);
+  const [manual, setManual] = useState(false);
   return (
     <div className="flex flex-wrap gap-1.5">
       {opciones.map((o) => (
@@ -84,22 +85,47 @@ export function FechaChips({ valor, onCambio }: { valor: string; onCambio: (iso:
           {o.label}
         </Chip>
       ))}
-      <label className={cx(
-        "press relative inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-bold",
-        otra ? "border-ink bg-ink text-ground" : "border-line-strong bg-surface"
-      )}>
-        <CalendarDays size={15} />
-        {otra ? new Date(valor + "T12:00:00").toLocaleDateString("es-AR", { day: "numeric", month: "short" }) : "Otra"}
+      <span className="relative inline-flex">
+        <button
+          type="button"
+          onClick={() => {
+            const i = ref.current;
+            if (!i) return;
+            // El calendario del sistema: showPicker en los navegadores nuevos; si no, el campo visible
+            try {
+              if (typeof i.showPicker === "function") return i.showPicker();
+            } catch {
+              /* sigue abajo */
+            }
+            setManual(true);
+            window.setTimeout(() => ref.current?.focus(), 0);
+          }}
+          className={cx(
+            "press inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-bold",
+            otra ? "border-ink bg-ink text-ground" : "border-line-strong bg-surface"
+          )}
+          aria-label="Elegir otra fecha"
+        >
+          <CalendarDays size={15} />
+          {otra ? new Date(valor + "T12:00:00").toLocaleDateString("es-AR", { day: "numeric", month: "short" }) : "Otra"}
+        </button>
         <input
           ref={ref}
           type="date"
           value={valor}
           max={hoy}
-          onChange={(e) => e.target.value && onCambio(e.target.value)}
-          className="absolute inset-0 cursor-pointer opacity-0"
-          aria-label="Elegir otra fecha"
+          onChange={(e) => {
+            if (e.target.value) onCambio(e.target.value);
+            setManual(false);
+          }}
+          onBlur={() => setManual(false)}
+          tabIndex={manual ? 0 : -1}
+          aria-hidden={!manual}
+          className={manual
+            ? "absolute top-full left-0 z-10 mt-1 min-h-11 rounded-xl border border-line-strong bg-surface px-3 font-bold shadow-soft"
+            : "pointer-events-none absolute bottom-0 left-0 h-px w-px opacity-0"}
         />
-      </label>
+      </span>
     </div>
   );
 }
