@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import useSWR from "swr";
 import { CalendarDays } from "lucide-react";
-import type { Categoria, MedioPago } from "@/lib/api";
+import type { Categoria, Cuenta, MedioPago, Moneda } from "@/lib/api";
 import { hoyISO, sumarDias } from "@/lib/format";
 import { Chip, IconoCat, cx } from "./ui";
 
@@ -26,6 +26,37 @@ export function MedioChips({ valor, onCambio, soloCredito }: { valor: string | n
         <Chip key={m.id} activo={valor === m.id} onClick={() => onCambio(m.id)}>
           {m.nombre}
         </Chip>
+      ))}
+    </div>
+  );
+}
+
+/** Cuentas donde puede entrar plata (sin tarjetas de crédito), para ingresos. */
+export function CuentaChips({ valor, onCambio, moneda }: { valor: string | null; onCambio: (id: string) => void; moneda?: Moneda }) {
+  const { data } = useSWR<Cuenta[]>("/cuentas");
+  if (!data) return <div className="esqueleto h-10 w-full" />;
+  const cuentas = data.filter((c) => c.tipo !== "tarjeta_credito" && !c.archivada && (!moneda || c.moneda === moneda));
+  if (!cuentas.length) return <p className="text-sm text-muted">Primero creá tus cuentas en Cuentas.</p>;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {cuentas.map((c) => (
+        <Chip key={c.id} activo={valor === c.id} onClick={() => onCambio(c.id)}>
+          {c.nombre}
+        </Chip>
+      ))}
+    </div>
+  );
+}
+
+/** Gasto o ingreso, para cuando el texto no lo deja claro. */
+export function TipoToggle({ valor, onCambio }: { valor: "gasto" | "ingreso"; onCambio: (t: "gasto" | "ingreso") => void }) {
+  return (
+    <div role="radiogroup" aria-label="Tipo" className="inline-flex rounded-full bg-surface-2 p-0.5">
+      {(["gasto", "ingreso"] as const).map((t) => (
+        <button key={t} type="button" role="radio" aria-checked={valor === t} onClick={() => onCambio(t)}
+          className={cx("press min-h-7 rounded-full px-2.5 text-[12px] font-bold", valor === t ? (t === "ingreso" ? "bg-ok text-white" : "bg-ink text-ground") : "text-muted")}>
+          {t === "gasto" ? "Gasto" : "Ingreso"}
+        </button>
       ))}
     </div>
   );

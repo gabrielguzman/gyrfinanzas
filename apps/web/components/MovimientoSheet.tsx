@@ -11,7 +11,7 @@ import { AdjuntarBoton } from "./AdjuntarBoton";
 import { EscudoGarantia, cuandoVence } from "./Garantias";
 import { EtiquetasEditor } from "./EtiquetasEditor";
 import { FueraDeSaldo, anteriorALaCuenta, useCuentaDe } from "./FueraDeSaldo";
-import { CategoriaPicker, FechaChips, MedioChips } from "./Selectores";
+import { CategoriaPicker, FechaChips, MedioChips, CuentaChips, TipoToggle } from "./Selectores";
 import { Sheet } from "./Sheet";
 import { useApp } from "./Shell";
 import { Boton, Campo, Chip, IconoCat, Mensaje, inputCls } from "./ui";
@@ -29,10 +29,12 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
   const [cuotas, setCuotas] = useState<number | null>(null);
   const [etiquetas, setEtiquetas] = useState<string[]>([]);
   const [fuera, setFuera] = useState(false);
+  const [tipo, setTipo] = useState<"gasto" | "ingreso" | "transferencia">("gasto");
+  const [cuentaSel, setCuentaSel] = useState<string | null>(null);
   const { data: medios } = useSWR<MedioPago[]>(id ? "/medios-pago" : null);
   const { data: categorias } = useSWR<Categoria[]>(id ? "/categorias" : null);
   const [error, setError] = useState<string | null>(null);
-  const cuentaMov = useCuentaDe(medio, medio ? null : mov?.cuenta_id);
+  const cuentaMov = useCuentaDe(tipo === "ingreso" ? null : medio, tipo === "ingreso" || !medio ? (tipo === "ingreso" ? cuentaSel : mov?.cuenta_id) : null);
   const [ocupado, setOcupado] = useState(false);
 
   useEffect(() => {
@@ -45,6 +47,8 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
     setCuotas(mov.cuotas);
     setEtiquetas(mov.etiquetas ?? []);
     setFuera(mov.fuera_de_saldo);
+    setTipo(mov.tipo);
+    setCuentaSel(mov.cuenta_id);
     setError(null);
   }, [mov]);
 
@@ -60,6 +64,15 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
     if ((cuotas ?? 1) !== (mov.cuotas ?? 1)) cambios.cuotas = cuotas ?? 1;
     if ([...etiquetas].sort().join() !== [...(mov.etiquetas ?? [])].sort().join()) cambios.etiquetas = etiquetas;
     if (fuera !== mov.fuera_de_saldo) cambios.fuera_de_saldo = fuera;
+    if (tipo !== mov.tipo) {
+      cambios.tipo = tipo;
+      if (categoria === mov.categoria_id) cambios.categoria_id = null;  // era una categoría del otro tipo
+      if (tipo === "ingreso") cambios.cuotas = null;
+    }
+    if (tipo === "ingreso" && cuentaSel !== mov.cuenta_id) {
+      cambios.cuenta_id = cuentaSel;
+      cambios.medio_pago_id = null;  // en un ingreso manda la cuenta
+    }
   }
   const enCuotas = (cuotas ?? 1) > 1;
   const medioActual = medios?.find((m) => m.id === medio);
@@ -109,7 +122,7 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
   }
 
   const esTransfer = mov?.tipo === "transferencia";
-  const ingreso = mov?.tipo === "ingreso";
+  const ingreso = mov ? tipo === "ingreso" : false;
 
   return (
     <Sheet abierto={!!id} onCerrar={onCerrar}>
@@ -127,13 +140,20 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
               <IconoCat icono={mov.categoria_icono} color={mov.categoria_color} size={48} />
             )}
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="text-xs font-semibold text-muted">
-                {mov.estado === "pendiente" ? "En la bandeja" : esTransfer ? "Transferencia" : (mov.categoria ?? "Sin categoría")}
-              </span>
+              {!esTransfer && !mov.deuda_id ? (
+                <div className="mb-1 flex items-center gap-2">
+                  <TipoToggle valor={tipo === "ingreso" ? "ingreso" : "gasto"} onCambio={(t) => { setTipo(t); if (t !== mov.tipo) setCategoria(null); else setCategoria(mov.categoria_id); }} />
+                  {mov.estado === "pendiente" && <span className="text-xs font-semibold text-muted">En la bandeja</span>}
+                </div>
+              ) : (
+                <span className="text-xs font-semibold text-muted">
+                  {mov.estado === "pendiente" ? "En la bandeja" : esTransfer ? "Transferencia" : (mov.categoria ?? "Sin categoría")}
+                </span>
+              )}
               <h2 className="truncate text-xl font-extrabold">{mov.descripcion}</h2>
             </div>
             <span className={`display num text-[28px] font-bold ${ingreso ? "text-ok" : ""}`}>
-              {monto(mov.monto, mov.moneda, ingreso ? "+" : mov.tipo === "gasto" ? "-" : undefined)}
+              {monto(mov.monto, mov.moneda, ingreso ? "+" : tipo === "gasto" ? "-" : undefined)}
             </span>
           </div>
 
@@ -166,15 +186,19 @@ export function MovimientoSheet({ id, onCerrar }: { id: string | null; onCerrar:
             </p>
           ) : (
             <div className="flex flex-col gap-2">
-              <span className="text-[13px] font-bold">{ingreso ? "Entró en" : "Pagaste con"}</span>
+              <span className="text-[13px] font-bold">{ingreso ? "¿A qué cuenta entró?" : "Pagaste con"}</span>
               {cuotasSinTarjeta && (
                 <Mensaje>Es en cuotas pero está cargada con {medioActual?.nombre}: elegí la tarjeta con la que la pagás (o dejala en un pago).</Mensaje>
               )}
-              <MedioChips valor={medio} onCambio={setMedio} soloCredito={enCuotas && !ingreso} />
+              {ingreso && !mov.deuda_id ? (
+                <CuentaChips valor={cuentaSel} onCambio={setCuentaSel} moneda={mov.moneda} />
+              ) : (
+                <MedioChips valor={medio} onCambio={setMedio} soloCredito={enCuotas && !ingreso} />
+              )}
             </div>
           )}
 
-          {mov.tipo === "gasto" && !mov.deuda_id && (
+          {tipo === "gasto" && !mov.deuda_id && (
             <div className="flex flex-col gap-2">
               <span className="text-[13px] font-bold">Cuotas</span>
               <div className="flex flex-wrap gap-1.5">

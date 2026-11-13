@@ -3,11 +3,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { Camera, FileCheck2, Pencil } from "lucide-react";
-import { api, ApiError, type Frecuente, type Interpretacion, type Movimiento, type Presupuesto } from "@/lib/api";
+import { api, ApiError, type Cuenta, type Frecuente, type Interpretacion, type Movimiento, type Presupuesto } from "@/lib/api";
 import { encolar } from "@/lib/cola";
 import { hoyISO, monto } from "@/lib/format";
 import { vibrar } from "@/lib/hooks";
-import { CategoriaPicker, FechaChips, MedioChips } from "./Selectores";
+import { CategoriaPicker, FechaChips, MedioChips, CuentaChips, TipoToggle } from "./Selectores";
 import { Sheet } from "./Sheet";
 import { duracion } from "./Garantias";
 import { FueraDeSaldo, anteriorALaCuenta, useCuentaDe } from "./FueraDeSaldo";
@@ -39,6 +39,9 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
   const [categoria, setCategoria] = useState<string | null>(null);
   const [fecha, setFecha] = useState<string | null>(null);
   const [fuera, setFuera] = useState<boolean | null>(null);
+  const [tipoElegido, setTipoElegido] = useState<"gasto" | "ingreso" | null>(null);
+  const [cuenta, setCuenta] = useState<string | null>(null);
+  const { data: cuentasTodas } = useSWR<Cuenta[]>(abierto ? "/cuentas" : null);
   const [verCategorias, setVerCategorias] = useState(false);
   const [archivo, setArchivo] = useState<File | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -75,10 +78,16 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
     return () => window.clearTimeout(t);
   }, [texto]);
 
+  const tipoVista = vista?.tipo === "ingreso" ? "ingreso" : "gasto";
+  const tipoFinal = tipoElegido ?? tipoVista;
+  const cambioTipo = !!vista && tipoFinal !== tipoVista;
   const medioFinal = medio ?? vista?.medio_pago_id ?? null;
-  const categoriaFinal = categoria ?? vista?.categoria_id ?? null;
+  // Los ingresos van a una cuenta (no a un medio de pago); la del medio que entendió el texto sirve de punto de partida
+  const cuentaTexto = cuentasTodas?.find((c) => c.id === vista?.cuenta_id && c.tipo !== "tarjeta_credito")?.id ?? null;
+  const cuentaFinal = tipoFinal === "ingreso" ? (cuenta ?? cuentaTexto) : null;
+  const categoriaFinal = categoria ?? (cambioTipo ? null : vista?.categoria_id ?? null);
   const fechaFinal = fecha ?? vista?.fecha ?? hoyISO();
-  const cuentaMov = useCuentaDe(medioFinal);
+  const cuentaMov = useCuentaDe(tipoFinal === "ingreso" ? null : medioFinal, cuentaFinal);
   const sugerirFuera = anteriorALaCuenta(fechaFinal, cuentaMov);
   const fueraFinal = fuera ?? sugerirFuera;
   const partes = vista && vista.para === texto ? vista.partes : [];
@@ -90,6 +99,8 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
     setCategoria(null);
     setFecha(null);
     setFuera(null);
+    setTipoElegido(null);
+    setCuenta(null);
     setVerCategorias(false);
     setArchivo(null);
     setError(null);
@@ -108,14 +119,25 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
     try {
       let mov = await api.post<Movimiento>("/captura", { texto });
       const cambios: Record<string, unknown> = {};
-      if (medio && medio !== mov.medio_pago_id) cambios.medio_pago_id = medio;
+      if (tipoFinal !== mov.tipo && mov.tipo !== "transferencia" && !mov.deuda_id) {
+        cambios.tipo = tipoFinal;
+        cambios.categoria_id = categoria;  // la categoría que entendió era del otro tipo
+        cambios.cuotas = null;
+      }
+      if (tipoFinal === "ingreso" && !mov.deuda_id) {
+        if (cuentaFinal && cuentaFinal !== mov.cuenta_id) cambios.cuenta_id = cuentaFinal;
+        if (mov.medio_pago_id && (cuentaFinal || cuentasTodas?.find((c) => c.id === mov.cuenta_id)?.tipo === "tarjeta_credito")) {
+          cambios.medio_pago_id = null;  // manda la cuenta (un ingreso no entra a una tarjeta por defecto)
+          if (!cuentaFinal) cambios.cuenta_id = null;
+        }
+      } else if (medio && medio !== mov.medio_pago_id) cambios.medio_pago_id = medio;
       if (categoria && categoria !== mov.categoria_id) cambios.categoria_id = categoria;
       if (fecha && fecha !== mov.fecha) cambios.fecha = fecha;
       if (fueraFinal && mov.tipo !== "transferencia") cambios.fuera_de_saldo = true;
       if (Object.keys(cambios).length) mov = await api.patch<Movimiento>(`/movimientos/${mov.id}`, cambios);
       if (archivo) await api.subir(`/movimientos/${mov.id}/adjuntos/subir`, archivo, { rol: "ticket" });
       const id = mov.id;
-      if (mov.medio_pago_id) {
+      if (mov.medio_pago_id || mov.cuenta_id) {
         await api.post(`/movimientos/${id}/confirmar`);
         vibrar();
         let resto = "";
@@ -125,7 +147,7 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
         }
         aviso(`Guardado: ${mov.descripcion} ${monto(mov.monto, mov.moneda)}${resto}`, { deshacer: () => api.del(`/movimientos/${id}`) });
       } else {
-        aviso("Quedó en la bandeja: falta con qué pagaste", { deshacer: () => api.del(`/movimientos/${id}`) });
+        aviso(mov.tipo === "ingreso" ? "Quedó en la bandeja: falta a qué cuenta entró" : "Quedó en la bandeja: falta con qué pagaste", { deshacer: () => api.del(`/movimientos/${id}`) });
       }
       refrescar();
       reiniciar();
@@ -143,7 +165,7 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
     }
   }
 
-  const ingreso = vista?.tipo === "ingreso";
+  const ingreso = tipoFinal === "ingreso";
 
   return (
     <Sheet abierto={abierto} onCerrar={onCerrar} titulo="¿Qué pasó?">
@@ -215,8 +237,11 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
               <IconoCat icono={vista.categoria_icono} color={vista.categoria_color} size={46} />
             )}
             <div className="flex min-w-0 flex-1 flex-col">
+              {!vista.deuda_tipo && vista.tipo !== "transferencia" && (
+                <div className="mb-1"><TipoToggle valor={tipoFinal} onCambio={(t) => { setTipoElegido(t); setCategoria(null); }} /></div>
+              )}
               <span className="text-xs font-semibold text-muted">
-                {vista.deuda_tipo === "me_deben" ? `Se suma a lo que te debe ${vista.deuda_nombre}` : vista.deuda_tipo === "debo" ? `Se anota en lo que le debés a ${vista.deuda_nombre}` : TIPO[vista.tipo]}
+                {vista.deuda_tipo === "me_deben" ? `Se suma a lo que te debe ${vista.deuda_nombre}` : vista.deuda_tipo === "debo" ? `Se anota en lo que le debés a ${vista.deuda_nombre}` : vista.tipo === "transferencia" ? TIPO[vista.tipo] : null}
                 {vista.cuotas ? ` en ${vista.cuotas} cuotas${vista.monto ? ` de ${monto(Math.round(Number(vista.monto) / vista.cuotas))}` : ""}` : ""}
                 {vista.garantia_meses ? ` · garantía ${duracion(vista.garantia_meses)}` : ""}
                 {vista.etiquetas?.length ? <span data-cat="pink" className="font-bold text-[var(--cat-fg)]"> · {vista.etiquetas.map((t) => `#${t}`).join(" ")}</span> : ""}
@@ -227,7 +252,7 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
                 onClick={() => setVerCategorias((v) => !v)}
                 className="flex w-fit items-center gap-1 text-[13px] font-semibold text-muted underline-offset-2 hover:underline"
               >
-                {vista.categoria ?? "Sin categoría"} <Pencil size={12} />
+                {categoria ? "Categoría elegida" : cambioTipo ? "Elegí la categoría" : (vista.categoria ?? "Sin categoría")} <Pencil size={12} />
               </button>}
             </div>
             <span className={cx("display num shrink-0 text-[26px] font-bold", ingreso && "text-ok")}>
@@ -258,10 +283,14 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
         {vista && (
           <div className="flex flex-col gap-2">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[13px] font-bold">{ingreso ? "Entró en" : "Pagaste con"}</span>
-              <span className="text-xs text-faint">{medio ? "elegido por vos" : (vista.motivo_medio ?? "elegí uno")}</span>
+              <span className="text-[13px] font-bold">{ingreso ? "¿A qué cuenta entró?" : "Pagaste con"}</span>
+              <span className="text-xs text-faint">{(ingreso ? cuenta : medio) ? "elegido por vos" : ingreso ? (cuentaFinal ? "según lo que escribiste" : "elegí una") : (vista.motivo_medio ?? "elegí uno")}</span>
             </div>
-            <MedioChips valor={medioFinal} onCambio={setMedio} soloCredito={!!vista?.cuotas && vista.cuotas > 1 && !vista.deuda_tipo} />
+            {ingreso && !vista.deuda_tipo ? (
+              <CuentaChips valor={cuentaFinal} onCambio={setCuenta} moneda={vista.moneda} />
+            ) : (
+              <MedioChips valor={medioFinal} onCambio={setMedio} soloCredito={!!vista?.cuotas && vista.cuotas > 1 && !vista.deuda_tipo} />
+            )}
           </div>
         )}
 
@@ -273,7 +302,7 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
         )}
 
         {vista && !vista.deuda_tipo && (
-          <FueraDeSaldo activo={fueraFinal} onCambio={setFuera} cuenta={cuentaMov} ingreso={vista.tipo === "ingreso"} sugerido={sugerirFuera} />
+          <FueraDeSaldo activo={fueraFinal} onCambio={setFuera} cuenta={cuentaMov} ingreso={ingreso} sugerido={sugerirFuera} />
         )}
 
         {error && <Mensaje>{error}</Mensaje>}
@@ -303,7 +332,7 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
             {archivo ? <FileCheck2 size={22} /> : <Camera size={22} />}
           </button>
           <Boton type="submit" variante="acento" disabled={!texto.trim() || guardando} className="min-h-14 flex-1 text-base font-extrabold">
-            {guardando ? "Guardando…" : medioFinal || !vista ? "Guardar" : "Guardar en la bandeja"}
+            {guardando ? "Guardando…" : (ingreso && !vista?.deuda_tipo ? cuentaFinal : medioFinal) || !vista ? "Guardar" : "Guardar en la bandeja"}
           </Boton>
         </div>
       </form>

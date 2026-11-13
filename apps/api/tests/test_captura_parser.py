@@ -79,3 +79,11 @@ def test_fechas_explicitas():
         assert (r.fecha, r.monto) == (f, m), texto
     assert interpretar("farmacia 5000 3/11", [], [], hoy=hoy).descripcion == "Farmacia"
     assert interpretar("nafta 40k el 5 de noviembre", [], [], hoy=hoy).descripcion == "Nafta"
+
+
+def test_mas_palabras_de_ingreso():
+    from app.models import TipoMovimiento
+    from app.services.captura import interpretar
+    for t in ("honorarios 300k", "me pagaron el freelance 250k", "me regalaron 20k", "gané 50k en el bingo", "me devolvieron 8000"):
+        assert interpretar(t, [], []).tipo == TipoMovimiento.ingreso, t
+    assert interpretar("cafe 3000", [], []).tipo == TipoMovimiento.gasto

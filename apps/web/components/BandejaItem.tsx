@@ -6,7 +6,7 @@ import { api, ApiError, type Movimiento } from "@/lib/api";
 import { fechaCorta, hoyISO, monto } from "@/lib/format";
 import { vibrar } from "@/lib/hooks";
 import { AdjuntarBoton } from "./AdjuntarBoton";
-import { MedioChips } from "./Selectores";
+import { CuentaChips, MedioChips } from "./Selectores";
 import { useApp } from "./Shell";
 import { Boton, IconoCat, cx } from "./ui";
 
@@ -21,11 +21,11 @@ export function BandejaItem({ mov }: { mov: Movimiento }) {
   const [saliendo, setSaliendo] = useState<"der" | "izq" | null>(null);
   const [oculto, setOculto] = useState(false);
   const inicio = useRef<{ x: number; y: number; eje: "x" | "y" | null } | null>(null);
-  const puedeConfirmar = !!mov.medio_pago_id;
+  const puedeConfirmar = !!(mov.medio_pago_id || mov.cuenta_id);
 
   async function confirmar() {
     if (!puedeConfirmar) {
-      aviso("Elegí con qué pagaste y después confirmalo");
+      aviso(mov.tipo === "ingreso" ? "Elegí a qué cuenta entró y después confirmalo" : "Elegí con qué pagaste y después confirmalo");
       return;
     }
     vibrar();
@@ -148,14 +148,18 @@ export function BandejaItem({ mov }: { mov: Movimiento }) {
           </div>
         </div>
 
-        {!mov.medio_pago_id ? (
+        {!puedeConfirmar ? (
           <div className="flex flex-col gap-2">
-            <span className="text-[13px] font-bold">¿Con qué pagaste?</span>
-            <MedioChips valor={null} onCambio={(id) => correr(() => api.patch(`/movimientos/${mov.id}`, { medio_pago_id: id }))} />
+            <span className="text-[13px] font-bold">{mov.tipo === "ingreso" ? "¿A qué cuenta entró?" : "¿Con qué pagaste?"}</span>
+            {mov.tipo === "ingreso" && !mov.deuda_id ? (
+              <CuentaChips valor={null} moneda={mov.moneda} onCambio={(id) => correr(() => api.patch(`/movimientos/${mov.id}`, { cuenta_id: id }))} />
+            ) : (
+              <MedioChips valor={null} onCambio={(id) => correr(() => api.patch(`/movimientos/${mov.id}`, { medio_pago_id: id }))} />
+            )}
           </div>
         ) : (
           <span className="text-[13px] text-muted">
-            Con <b className="text-ink">{mov.medio_pago}</b>
+            {mov.tipo === "ingreso" ? <>Entra en <b className="text-ink">{mov.cuenta}</b></> : <>Con <b className="text-ink">{mov.medio_pago ?? mov.cuenta}</b></>}
             {mov.categoria && <> en <b className="text-ink">{mov.categoria}</b></>}
           </span>
         )}

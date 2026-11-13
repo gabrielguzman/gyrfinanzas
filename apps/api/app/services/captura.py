@@ -20,7 +20,9 @@ MULTIPLICADORES = {
 PALABRAS_USD = {"usd", "u$s", "us$", "dolar", "dolares", "verdes"}
 PALABRAS_INGRESO = {
     "cobre", "cobro", "sueldo", "aguinaldo", "ingreso", "vendi", "reintegro",
-    "depositaron", "transfirieron", "pagaron",
+    "depositaron", "transfirieron", "pagaron", "honorarios", "freelance", "reembolso",
+    "reembolsaron", "premio", "gane", "regalaron", "aguinaldo", "bono", "venta", "cobranza",
+    "intereses", "rendimiento", "devolvieron",
 }
 RELLENO = {
     "el", "la", "los", "las", "de", "del", "en", "con", "un", "una", "me", "le", "por",
