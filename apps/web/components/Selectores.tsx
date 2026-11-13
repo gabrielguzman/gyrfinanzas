@@ -2,7 +2,8 @@
 
 import { useRef, useState } from "react";
 import useSWR from "swr";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Plus } from "lucide-react";
+import { CategoriaSheet } from "./CategoriaSheet";
 import type { Categoria, Cuenta, MedioPago, Moneda } from "@/lib/api";
 import { hoyISO, sumarDias } from "@/lib/format";
 import { Chip, IconoCat, cx } from "./ui";
@@ -62,7 +63,7 @@ export function TipoToggle({ valor, onCambio }: { valor: "gasto" | "ingreso"; on
   );
 }
 
-/** Categorías como fila deslizable de íconos (reemplaza al select). */
+/** Categorías como fila deslizable de íconos (reemplaza al select). Al final, «Nueva». */
 export function CategoriaPicker({
   valor,
   tipo,
@@ -72,29 +73,46 @@ export function CategoriaPicker({
   tipo: "gasto" | "ingreso";
   onCambio: (id: string) => void;
 }) {
-  const { data } = useSWR<Categoria[]>("/categorias");
+  const { data, mutate } = useSWR<Categoria[]>("/categorias");
+  const [nueva, setNueva] = useState(false);
   const lista = data?.filter((c) => c.tipo === tipo) ?? [];
   return (
-    <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 pb-1" role="radiogroup" aria-label="Categoría">
-      {lista.map((c) => {
-        const activo = valor === c.id;
-        return (
-          <button
-            key={c.id}
-            role="radio"
-            aria-checked={activo}
-            onClick={() => onCambio(c.id)}
-            className={cx(
-              "press flex w-[76px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border px-1 py-2.5 text-[11px] leading-tight font-bold",
-              activo ? "border-ink bg-surface" : "border-transparent"
-            )}
-          >
-            <IconoCat icono={c.icono} color={c.color} size={38} />
-            <span className="line-clamp-2 text-center">{c.nombre}</span>
-          </button>
-        );
-      })}
-    </div>
+    <>
+      <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 pb-1" role="radiogroup" aria-label="Categoría">
+        {lista.map((c) => {
+          const activo = valor === c.id;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              role="radio"
+              aria-checked={activo}
+              onClick={() => onCambio(c.id)}
+              className={cx(
+                "press flex w-[76px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border px-1 py-2.5 text-[11px] leading-tight font-bold",
+                activo ? "border-ink bg-surface" : "border-transparent"
+              )}
+            >
+              <IconoCat icono={c.icono} color={c.color} size={38} />
+              <span className="line-clamp-2 text-center">{c.nombre}</span>
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => setNueva(true)}
+          className="press flex w-[76px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border border-dashed border-line-strong px-1 py-2.5 text-[11px] leading-tight font-bold text-muted"
+        >
+          <span className="flex h-[38px] w-[38px] items-center justify-center rounded-[13px] bg-surface-2"><Plus size={18} /></span>
+          Nueva
+        </button>
+      </div>
+      <CategoriaSheet
+        abierta={nueva ? { nueva: true, tipo } : null}
+        onCerrar={() => setNueva(false)}
+        onCreada={(c) => { mutate(); onCambio(c.id); }}
+      />
+    </>
   );
 }
 

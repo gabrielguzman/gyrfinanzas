@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { Camera, FileCheck2, Pencil } from "lucide-react";
-import { api, ApiError, type Cuenta, type Frecuente, type Interpretacion, type Movimiento, type Presupuesto } from "@/lib/api";
+import { api, ApiError, type Categoria, type Cuenta, type Frecuente, type Interpretacion, type Movimiento, type Presupuesto } from "@/lib/api";
 import { encolar } from "@/lib/cola";
 import { hoyISO, monto } from "@/lib/format";
 import { vibrar } from "@/lib/hooks";
@@ -42,6 +42,7 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
   const [tipoElegido, setTipoElegido] = useState<"gasto" | "ingreso" | null>(null);
   const [cuenta, setCuenta] = useState<string | null>(null);
   const { data: cuentasTodas } = useSWR<Cuenta[]>(abierto ? "/cuentas" : null);
+  const { data: categoriasTodas } = useSWR<Categoria[]>(abierto ? "/categorias" : null);
   const [verCategorias, setVerCategorias] = useState(false);
   const [archivo, setArchivo] = useState<File | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -86,6 +87,7 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
   const cuentaTexto = cuentasTodas?.find((c) => c.id === vista?.cuenta_id && c.tipo !== "tarjeta_credito")?.id ?? null;
   const cuentaFinal = tipoFinal === "ingreso" ? (cuenta ?? cuentaTexto) : null;
   const categoriaFinal = categoria ?? (cambioTipo ? null : vista?.categoria_id ?? null);
+  const catElegida = categoria ? categoriasTodas?.find((c) => c.id === categoria) ?? null : null;
   const fechaFinal = fecha ?? vista?.fecha ?? hoyISO();
   const cuentaMov = useCuentaDe(tipoFinal === "ingreso" ? null : medioFinal, cuentaFinal);
   const sugerirFuera = anteriorALaCuenta(fechaFinal, cuentaMov);
@@ -234,7 +236,7 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
             {vista.deuda_tipo ? (
               <IconoCat icono="persona" color={vista.deuda_tipo === "me_deben" ? "green" : "orange"} size={46} />
             ) : (
-              <IconoCat icono={vista.categoria_icono} color={vista.categoria_color} size={46} />
+              <IconoCat icono={catElegida ? catElegida.icono : cambioTipo ? null : vista.categoria_icono} color={catElegida ? catElegida.color : cambioTipo ? null : vista.categoria_color} size={46} />
             )}
             <div className="flex min-w-0 flex-1 flex-col">
               {!vista.deuda_tipo && vista.tipo !== "transferencia" && (
@@ -252,7 +254,7 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
                 onClick={() => setVerCategorias((v) => !v)}
                 className="flex w-fit items-center gap-1 text-[13px] font-semibold text-muted underline-offset-2 hover:underline"
               >
-                {categoria ? "Categoría elegida" : cambioTipo ? "Elegí la categoría" : (vista.categoria ?? "Sin categoría")} <Pencil size={12} />
+                {catElegida ? catElegida.nombre : cambioTipo ? "Elegí la categoría" : (vista.categoria ?? "Sin categoría")} <Pencil size={12} />
               </button>}
             </div>
             <span className={cx("display num shrink-0 text-[26px] font-bold", ingreso && "text-ok")}>

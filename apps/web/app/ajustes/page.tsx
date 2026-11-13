@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import useSWR from "swr";
-import { ArrowRight, Bell, BellOff, Send, Tags, X } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Bell, Shapes, BellOff, Send, Tags, X } from "lucide-react";
 import { ExportarPanel } from "@/components/Exportar";
 import { CategoriaPicker } from "@/components/Selectores";
 import { useApp } from "@/components/Shell";
@@ -231,6 +232,14 @@ export default function AjustesPage() {
   return (
     <div className="flex flex-col gap-8 lg:max-w-3xl">
       <Titulo>Ajustes</Titulo>
+      <Link href="/categorias" className="press flex items-center gap-3 rounded-[22px] bg-surface p-4 shadow-soft hover:bg-surface-2">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-accent-soft text-accent"><Shapes size={20} /></span>
+        <span className="flex flex-1 flex-col">
+          <b>Categorías</b>
+          <span className="text-[13px] text-muted">Agregá las tuyas o las clásicas (Kiosco, Farmacia, Mascotas…), cambiales el ícono o fusionalas</span>
+        </span>
+        <ArrowRight size={18} className="text-faint" />
+      </Link>
       <Avisos />
       <Reglas />
       <Seccion titulo="Exportar tus datos">

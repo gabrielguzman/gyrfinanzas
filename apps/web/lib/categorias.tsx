@@ -1,7 +1,9 @@
 import {
   Banknote, Briefcase, HandCoins, UserRound, Bus, Car, CircleDashed, Coffee, Fuel, Gift, GraduationCap, HeartPulse, House,
   Landmark, Laptop, Percent, PiggyBank, Repeat, Shirt, ShoppingCart, Smartphone, Sofa, Tag, Ticket,
-  UtensilsCrossed, Wallet, type LucideIcon,
+  UtensilsCrossed, Wallet, Candy, Bike, Pill, PawPrint, Scissors, Dumbbell, Receipt, Plane, Baby, Gamepad2, HandHeart,
+  Wine, TrendingUp, KeyRound, RotateCcw, Music, BookOpen, Wrench, Zap, Wifi, Pizza, Palette, Sprout, Trophy, Cigarette,
+  type LucideIcon,
 } from "lucide-react";
 
 export const ICONOS: Record<string, LucideIcon> = {
@@ -28,6 +30,33 @@ export const ICONOS: Record<string, LucideIcon> = {
   deuda: HandCoins,
   persona: UserRound,
   prestamo: Landmark,
+  kiosco: Candy,
+  delivery: Bike,
+  farmacia: Pill,
+  mascotas: PawPrint,
+  cuidado: Scissors,
+  deporte: Dumbbell,
+  celular: Wifi,
+  servicios: Zap,
+  impuestos: Receipt,
+  viajes: Plane,
+  hijos: Baby,
+  tecnologia: Laptop,
+  juegos: Gamepad2,
+  bebidas: Wine,
+  mantenimiento: Wrench,
+  donacion: HandHeart,
+  inversion: TrendingUp,
+  alquiler: KeyRound,
+  reintegro: RotateCcw,
+  premio: Trophy,
+  musica: Music,
+  libros: BookOpen,
+  pizza: Pizza,
+  arte: Palette,
+  plantas: Sprout,
+  cigarrillos: Cigarette,
+  telefono: Smartphone,
   // cuentas
   banco: Landmark,
   billetera: Smartphone,
@@ -36,3 +65,8 @@ export const ICONOS: Record<string, LucideIcon> = {
 };
 
 export const COLORES = ["green", "orange", "red", "amber", "blue", "pink", "purple", "indigo", "teal", "slate"] as const;
+
+/** Los íconos que se pueden elegir para una categoría (sin los de cuentas). */
+export const ICONOS_CATEGORIA = Object.keys(ICONOS).filter(
+  (k) => !["banco", "billetera", "efectivo", "tarjeta_credito", "persona", "prestamo"].includes(k)
+);
