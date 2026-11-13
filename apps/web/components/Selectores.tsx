@@ -78,7 +78,25 @@ export function CategoriaPicker({
   const lista = data?.filter((c) => c.tipo === tipo) ?? [];
   return (
     <>
-      <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 pb-1" role="radiogroup" aria-label="Categoría">
+      {/* Celu: fila que se desliza. Compu: todas a la vista (con mouse no se puede deslizar de costado). */}
+      <div
+        className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 pb-1 lg:mx-0 lg:grid lg:grid-cols-[repeat(auto-fill,minmax(76px,1fr))] lg:gap-1.5 lg:overflow-visible lg:px-0"
+        role="radiogroup"
+        aria-label="Categoría"
+        onWheel={(e) => {
+          // Con la ruedita del mouse, si la fila se desliza, que avance de costado
+          const el = e.currentTarget;
+          if (el.scrollWidth > el.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) el.scrollLeft += e.deltaY;
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setNueva(true)}
+          className="press flex w-[76px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border border-dashed border-line-strong px-1 py-2.5 text-[11px] leading-tight font-bold text-muted hover:bg-surface-2 lg:w-auto"
+        >
+          <span className="flex h-[38px] w-[38px] items-center justify-center rounded-[13px] bg-surface-2"><Plus size={18} /></span>
+          Nueva
+        </button>
         {lista.map((c) => {
           const activo = valor === c.id;
           return (
@@ -89,8 +107,8 @@ export function CategoriaPicker({
               aria-checked={activo}
               onClick={() => onCambio(c.id)}
               className={cx(
-                "press flex w-[76px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border px-1 py-2.5 text-[11px] leading-tight font-bold",
-                activo ? "border-ink bg-surface" : "border-transparent"
+                "press flex w-[76px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border px-1 py-2.5 text-[11px] leading-tight font-bold lg:w-auto",
+                activo ? "border-ink bg-surface" : "border-transparent hover:bg-surface-2"
               )}
             >
               <IconoCat icono={c.icono} color={c.color} size={38} />
@@ -98,14 +116,6 @@ export function CategoriaPicker({
             </button>
           );
         })}
-        <button
-          type="button"
-          onClick={() => setNueva(true)}
-          className="press flex w-[76px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border border-dashed border-line-strong px-1 py-2.5 text-[11px] leading-tight font-bold text-muted"
-        >
-          <span className="flex h-[38px] w-[38px] items-center justify-center rounded-[13px] bg-surface-2"><Plus size={18} /></span>
-          Nueva
-        </button>
       </div>
       <CategoriaSheet
         abierta={nueva ? { nueva: true, tipo } : null}
