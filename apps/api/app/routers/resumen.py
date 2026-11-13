@@ -42,6 +42,19 @@ def _cuotas_del_mes(db: Session, anio: int, mes: int) -> list[Gasto]:
     return out
 
 
+def gastos_del_mes(db: Session, anio: int, mes: int) -> list[Gasto]:
+    """Los gastos del mes como se cuentan en el resumen: sin préstamos a personas y con las
+    compras en cuotas por su cuota del mes."""
+    inicio, fin, _ = _rango(anio, mes)
+    me_deben = set(db.scalars(select(Deuda.id).where(Deuda.tipo == TipoDeuda.me_deben)))
+    movs = db.scalars(select(Movimiento).options(selectinload(Movimiento.categoria)).where(
+        Movimiento.estado == EstadoMovimiento.confirmado, Movimiento.moneda == Moneda.ARS,
+        Movimiento.tipo == TipoMovimiento.gasto, Movimiento.fecha.between(inicio, fin)))
+    out = [Gasto(x.fecha, x.monto, x.categoria) for x in movs
+           if (not x.deuda_id or x.deuda_id not in me_deben) and not (x.cuotas and x.cuotas > 1)]
+    return out + _cuotas_del_mes(db, anio, mes)
+
+
 def _acumulado(movs: list, dias: int, hasta: int) -> list[PuntoDiario]:
     por_dia: dict[int, Decimal] = defaultdict(lambda: CERO)
     for m in movs:

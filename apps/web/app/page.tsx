@@ -13,7 +13,8 @@ import { Anillo } from "@/components/Metas";
 import { BotonDiscreto, SelectorTema, useApp } from "@/components/Shell";
 import { RachaCard } from "@/components/Racha";
 import { Boton, Esqueleto, Lista, Seccion, Vacio } from "@/components/ui";
-import { api, type Etiquetas } from "@/lib/api";
+import { api, type Etiquetas, type Tope } from "@/lib/api";
+import { TopesCard } from "@/components/Topes";
 import type { CalendarioPlan, Meta, Cuenta, Deuda, Hallazgo, Inicio, Movimiento, Presupuesto, Resumen, Tarjeta } from "@/lib/api";
 import { cantidadEnCola } from "@/lib/cola";
 import { fechaCorta, MESES, monto, nombrePeriodo } from "@/lib/format";
@@ -158,6 +159,7 @@ export default function InicioPage() {
   const { data: metas } = useSWR<Meta[]>("/metas");
   const { data: calendario } = useSWR<CalendarioPlan>(plan?.configurado ? "/plan/calendario" : null);
   const { data: etiquetas, mutate: mutarEtiquetas } = useSWR<Etiquetas>("/etiquetas");
+  const { data: topes } = useSWR<Tope[]>("/topes");
   const [enCola, setEnCola] = useState(0);
   useEffect(() => setEnCola(cantidadEnCola()), [inicio]);
 
@@ -224,7 +226,12 @@ export default function InicioPage() {
 
           <Seccion
             titulo="En qué se fue"
-            extra={resumen && <span className="num text-sm font-semibold text-muted">{monto(resumen.gastos)}</span>}
+            extra={resumen && (
+              <span className="flex items-baseline gap-3">
+                {topes && topes.length === 0 && <Link href="/topes" className="text-sm font-bold text-accent">Poner topes</Link>}
+                <span className="num text-sm font-semibold text-muted">{monto(resumen.gastos)}</span>
+              </span>
+            )}
           >
             {resumen ? (
               resumen.por_categoria.length ? (
@@ -265,6 +272,12 @@ export default function InicioPage() {
           {hallazgos && hallazgos.filter((h) => h.tono === "aviso").length > 0 && (
             <Seccion titulo="Para mirar" extra={<Link href="/semana" className="text-sm font-bold text-accent">Ver todo</Link>}>
               <Lista>{hallazgos.filter((h) => h.tono === "aviso").slice(0, 3).map((h) => <HallazgoFila key={h.clave} h={h} />)}</Lista>
+            </Seccion>
+          )}
+
+          {topes && topes.length > 0 && (
+            <Seccion titulo="Topes del mes" extra={<Link href="/topes" className="text-sm font-bold text-accent">Editar</Link>}>
+              <TopesCard topes={topes} />
             </Seccion>
           )}
 

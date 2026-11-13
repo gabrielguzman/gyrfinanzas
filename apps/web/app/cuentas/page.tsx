@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import useSWR from "swr";
-import { ArrowLeftRight, Plus, Goal, Landmark, Repeat, Settings } from "lucide-react";
-import { COLOR_CUENTA, NuevaCuentaSheet, NuevoMedioSheet, TransferenciaSheet } from "@/components/CuentaForms";
+import { ArrowLeftRight, Gauge, Pencil, Plus, Goal, Landmark, Repeat, Settings } from "lucide-react";
+import { COLOR_CUENTA, EditarCuentaSheet, NuevaCuentaSheet, NuevoMedioSheet, TransferenciaSheet } from "@/components/CuentaForms";
 import { useContador } from "@/lib/hooks";
 import { Salir } from "@/components/Shell";
 import { Boton, Esqueleto, IconoCat, Lista, Seccion, Titulo, Vacio } from "@/components/ui";
@@ -31,6 +31,7 @@ export default function CuentasPage() {
   const [nuevaCuenta, setNuevaCuenta] = useState(false);
   const [nuevoMedio, setNuevoMedio] = useState(false);
   const [transfer, setTransfer] = useState<{ abierto: boolean; destino?: string }>({ abierto: false });
+  const [editar, setEditar] = useState<Cuenta | null>(null);
 
   const plata = cuentas?.filter((c) => c.tipo !== "tarjeta_credito") ?? [];
   const tarjetas = cuentas?.filter((c) => c.tipo === "tarjeta_credito") ?? [];
@@ -51,6 +52,10 @@ export default function CuentasPage() {
         <Link href="/fijos" className="press flex items-center gap-3 rounded-[20px] bg-surface p-3.5 shadow-soft">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-warn-soft text-warn-ink"><Repeat size={19} /></span>
           <span className="flex min-w-0 flex-col"><span className="text-sm font-bold">Gastos fijos</span><span className="truncate text-xs text-muted">Alquiler, servicios</span></span>
+        </Link>
+        <Link href="/topes" className="press flex items-center gap-3 rounded-[20px] bg-surface p-3.5 shadow-soft">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-danger-soft text-danger"><Gauge size={19} /></span>
+          <span className="flex min-w-0 flex-col"><span className="text-sm font-bold">Topes</span><span className="truncate text-xs text-muted">Por categoría</span></span>
         </Link>
         <Link href="/ajustes" className="press flex items-center gap-3 rounded-[20px] bg-surface p-3.5 shadow-soft">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-surface-2 text-muted"><Settings size={19} /></span>
@@ -76,14 +81,15 @@ export default function CuentasPage() {
             <Seccion titulo="Dónde está tu plata">
               <Lista>
                 {plata.map((c) => (
-                  <div key={c.id} className="flex min-h-16 items-center gap-3 px-4 py-3">
+                  <button key={c.id} onClick={() => setEditar(c)} className="press flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-2">
                     <IconoCat icono={c.tipo} color={COLOR_CUENTA[c.tipo]} />
                     <div className="flex flex-1 flex-col">
                       <span className="text-[15px] font-bold">{c.nombre}</span>
                       <span className="text-xs text-muted">{TIPO_CUENTA[c.tipo]}{c.moneda === "USD" ? " en dólares" : ""}</span>
                     </div>
                     <span className="num font-extrabold">{monto(c.saldo, c.moneda)}</span>
-                  </div>
+                    <Pencil size={14} className="shrink-0 text-faint" />
+                  </button>
                 ))}
               </Lista>
             </Seccion>
@@ -109,14 +115,19 @@ export default function CuentasPage() {
                         <span className="text-xs text-slab-muted">Debés · tocá para ver cuotas y resúmenes</span>
                         <p className="display num text-[32px] leading-none font-bold">{monto(deuda, c.moneda)}</p>
                       </div>
-                      {deuda > 0 && (
-                        <button
-                          onClick={() => setTransfer({ abierto: true, destino: c.id })}
-                          className="press relative z-10 min-h-11 rounded-2xl bg-white/12 text-sm font-bold"
-                        >
-                          Pagar el resumen
+                      <div className="relative z-10 flex gap-2">
+                        {deuda > 0 && (
+                          <button
+                            onClick={() => setTransfer({ abierto: true, destino: c.id })}
+                            className="press min-h-11 flex-1 rounded-2xl bg-white/12 text-sm font-bold"
+                          >
+                            Pagar el resumen
+                          </button>
+                        )}
+                        <button onClick={() => setEditar(c)} className="press flex min-h-11 items-center justify-center gap-1.5 rounded-2xl bg-white/12 px-4 text-sm font-bold">
+                          <Pencil size={14} /> Ajustar
                         </button>
-                      )}
+                      </div>
                     </div>
                   );
                 })}
@@ -158,6 +169,7 @@ export default function CuentasPage() {
 
       <NuevaCuentaSheet abierto={nuevaCuenta} onCerrar={() => setNuevaCuenta(false)} />
       <NuevoMedioSheet abierto={nuevoMedio} onCerrar={() => setNuevoMedio(false)} />
+      <EditarCuentaSheet cuenta={editar} onCerrar={() => setEditar(null)} />
       <TransferenciaSheet key={transfer.destino ?? "libre"} abierto={transfer.abierto} destinoInicial={transfer.destino} onCerrar={() => setTransfer({ abierto: false })} />
       <div className="lg:hidden"><Salir /></div>
     </div>

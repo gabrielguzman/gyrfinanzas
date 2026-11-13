@@ -234,3 +234,75 @@ export function TransferenciaSheet({ abierto, onCerrar, destinoInicial }: { abie
     </Sheet>
   );
 }
+
+/** Editar una cuenta: nombre, cuánto hay hoy (o cuánto debés, si es tarjeta) y días de la tarjeta. */
+export function EditarCuentaSheet({ cuenta, onCerrar }: { cuenta: Cuenta | null; onCerrar: () => void }) {
+  const { ocupado, error, enviar } = useEnvio();
+  const esTarjeta = cuenta?.tipo === "tarjeta_credito";
+  const actual = cuenta ? (esTarjeta ? Math.max(0, -Number(cuenta.saldo)) : Number(cuenta.saldo)) : 0;
+  const [nombre, setNombre] = useState("");
+  const [valor, setValor] = useState("");
+  const [cierre, setCierre] = useState("");
+  const [vence, setVence] = useState("");
+  const [abierta, setAbierta] = useState<string | null>(null);
+  if (cuenta && abierta !== cuenta.id) {
+    setAbierta(cuenta.id);
+    setNombre(cuenta.nombre);
+    setValor(String(Math.round(actual * 100) / 100));
+    setCierre(cuenta.dia_cierre ? String(cuenta.dia_cierre) : "");
+    setVence(cuenta.dia_vencimiento ? String(cuenta.dia_vencimiento) : "");
+  }
+  if (!cuenta && abierta) setAbierta(null);
+
+  const nuevo = Number(valor.replace(",", "."));
+  const cambiaSaldo = valor !== "" && !Number.isNaN(nuevo) && Math.abs(nuevo - actual) >= 0.01;
+  const diferencia = nuevo - actual;
+
+  async function guardar() {
+    if (!cuenta) return;
+    const datos: Record<string, unknown> = {};
+    if (nombre.trim() && nombre.trim() !== cuenta.nombre) datos.nombre = nombre.trim();
+    if (cambiaSaldo) datos.saldo_actual = String(esTarjeta ? -Math.abs(nuevo) : nuevo);
+    if (esTarjeta) {
+      datos.dia_cierre = cierre ? Number(cierre) : null;
+      datos.dia_vencimiento = vence ? Number(vence) : null;
+    }
+    if (await enviar(() => api.patch(`/cuentas/${cuenta.id}`, datos), "Cuenta actualizada")) onCerrar();
+  }
+
+  return (
+    <Sheet abierto={!!cuenta} onCerrar={onCerrar} titulo={cuenta?.nombre}>
+      {cuenta && (
+        <>
+          <Campo label="Nombre">
+            <input className={inputCls} value={nombre} onChange={(e) => setNombre(e.target.value)} />
+          </Campo>
+          <Campo
+            label={esTarjeta ? "¿Cuánto debés hoy en esta tarjeta?" : "¿Cuánto tenés hoy en esta cuenta?"}
+            ayuda={cambiaSaldo
+              ? `Corrijo el saldo ${diferencia > 0 ? "sumando" : "restando"} ${monto(Math.abs(diferencia), cuenta.moneda)}, sin crear movimientos: tus gastos e ingresos quedan como están.`
+              : "Si no coincide con lo que ves en el banco o la app, poné el número real y lo corrijo."}
+          >
+            <input className={`${inputCls} num`} inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value.replace(/[^\d.,-]/g, ""))} />
+          </Campo>
+          {esTarjeta && (
+            <div className="grid grid-cols-2 gap-3">
+              <Campo label="Día de cierre">
+                <input className={`${inputCls} num`} inputMode="numeric" value={cierre} placeholder="ej. 25" onChange={(e) => setCierre(e.target.value.replace(/\D/g, "").slice(0, 2))} />
+              </Campo>
+              <Campo label="Día de vencimiento">
+                <input className={`${inputCls} num`} inputMode="numeric" value={vence} placeholder="ej. 5" onChange={(e) => setVence(e.target.value.replace(/\D/g, "").slice(0, 2))} />
+              </Campo>
+            </div>
+          )}
+          {error && <Mensaje tono="error">{error}</Mensaje>}
+          <Boton variante="acento" disabled={ocupado || !nombre.trim()} onClick={guardar}>Guardar</Boton>
+          <Boton variante="fantasma" disabled={ocupado}
+            onClick={async () => { if (await enviar(() => api.patch(`/cuentas/${cuenta.id}`, { archivada: true }), `Archivaste ${cuenta.nombre}`)) onCerrar(); }}>
+            Archivar cuenta
+          </Boton>
+        </>
+      )}
+    </Sheet>
+  );
+}

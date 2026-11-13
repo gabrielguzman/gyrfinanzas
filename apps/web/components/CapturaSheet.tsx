@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { Camera, FileCheck2, Pencil } from "lucide-react";
-import { api, ApiError, type Categoria, type Cuenta, type Frecuente, type Interpretacion, type Movimiento, type Presupuesto } from "@/lib/api";
+import { api, ApiError, type Categoria, type Cuenta, type Tope, type Frecuente, type Interpretacion, type Movimiento, type Presupuesto } from "@/lib/api";
 import { encolar } from "@/lib/cola";
 import { hoyISO, monto } from "@/lib/format";
 import { vibrar } from "@/lib/hooks";
@@ -144,8 +144,15 @@ export function CapturaSheet({ abierto, onCerrar }: { abierto: boolean; onCerrar
         vibrar();
         let resto = "";
         if (mov.tipo === "gasto") {
-          const p = await api.get<Presupuesto>("/plan").catch(() => null);
-          if (p?.configurado) resto = Number(p.hoy) >= 0 ? ` · hoy te quedan ${monto(p.hoy)}` : ` · hoy te pasaste ${monto(-Number(p.hoy))}`;
+          const [p, topes] = await Promise.all([
+            api.get<Presupuesto>("/plan").catch(() => null),
+            mov.categoria_id ? api.get<Tope[]>("/topes").catch(() => []) : Promise.resolve([] as Tope[]),
+          ]);
+          const t = topes.find((x) => x.categoria_id === mov.categoria_id);
+          // Si la categoría tiene tope y viene ajustada, eso es lo más útil de decir
+          if (t && t.estado === "pasado") resto = ` · te pasaste del tope de ${t.categoria}`;
+          else if (t && t.estado === "cerca") resto = ` · ${t.porcentaje}% del tope de ${t.categoria}, quedan ${monto(Math.round(Number(t.queda)))}`;
+          else if (p?.configurado) resto = Number(p.hoy) >= 0 ? ` · hoy te quedan ${monto(p.hoy)}` : ` · hoy te pasaste ${monto(-Number(p.hoy))}`;
         }
         aviso(`Guardado: ${mov.descripcion} ${monto(mov.monto, mov.moneda)}${resto}`, { deshacer: () => api.del(`/movimientos/${id}`) });
       } else {

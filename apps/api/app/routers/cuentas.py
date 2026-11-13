@@ -44,7 +44,13 @@ def detalle(cuenta_id: uuid.UUID, db: Session = Depends(get_db)):
 @router.patch("/{cuenta_id}", response_model=CuentaOut)
 def editar(cuenta_id: uuid.UUID, datos: CuentaPatch, db: Session = Depends(get_db)):
     cuenta = obtener(db, Cuenta, cuenta_id, "Cuenta")
-    for k, v in datos.model_dump(exclude_unset=True).items():
+    cambios = datos.model_dump(exclude_unset=True)
+    saldo_actual = cambios.pop("saldo_actual", None)
+    for k, v in cambios.items():
         setattr(cuenta, k, v)
+    if saldo_actual is not None:
+        db.flush()
+        hoy = saldos_por_cuenta(db).get(cuenta.id, cuenta.saldo_inicial)
+        cuenta.saldo_inicial = cuenta.saldo_inicial + (saldo_actual - hoy)
     db.commit()
     return _out(cuenta, saldos_por_cuenta(db))

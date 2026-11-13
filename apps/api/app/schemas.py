@@ -34,6 +34,8 @@ class CuentaIn(BaseModel):
 class CuentaPatch(BaseModel):
     nombre: str | None = Field(default=None, min_length=1, max_length=80)
     saldo_inicial: Decimal | None = None
+    # «Hoy tengo X»: se ajusta el saldo inicial para que el saldo de hoy dé eso (sin crear movimientos)
+    saldo_actual: Decimal | None = None
     dia_cierre: int | None = Field(default=None, ge=1, le=31)
     dia_vencimiento: int | None = Field(default=None, ge=1, le=31)
     archivada: bool | None = None

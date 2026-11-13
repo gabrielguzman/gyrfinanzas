@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { CalendarRange, Eye, EyeOff, FileText, Hash, HandCoins, Home, List, Monitor, Moon, Goal, Landmark, LogOut, Plus, Repeat, Settings, Shapes, ShieldCheck, ShoppingBag, Sun, Target, UserRound, Wallet } from "lucide-react";
+import { CalendarRange, Eye, EyeOff, FileText, Gauge, Hash, HandCoins, Home, List, Monitor, Moon, Goal, Landmark, LogOut, Plus, Repeat, Settings, Shapes, ShieldCheck, ShoppingBag, Sun, Target, UserRound, Wallet } from "lucide-react";
 import { SWRConfig, useSWRConfig } from "swr";
 import { fetcher } from "@/lib/api";
 import { desvincularDispositivo } from "@/lib/push";
@@ -57,6 +57,7 @@ const GRUPOS: { titulo: string | null; items: ItemNav[] }[] = [
       { href: "/cuentas", label: "Cuentas", Icon: Wallet },
       { href: "/deudas", label: "Deudas", Icon: HandCoins },
       { href: "/fijos", label: "Gastos fijos", Icon: Repeat },
+      { href: "/topes", label: "Topes", Icon: Gauge },
       { href: "/metas", label: "Metas", Icon: Goal },
       { href: "/patrimonio", label: "Patrimonio", Icon: Landmark },
     ],
@@ -80,7 +81,7 @@ const NAV: ItemNav[] = [
 // En el celu entran cuatro: Comprobantes y Garantías se abren desde Movimientos, Tu semana desde Inicio.
 // El plan se abre desde la tarjeta «Hoy podés gastar» de Inicio.
 // Metas y Patrimonio, desde Cuentas e Inicio.
-const NAV_CELU = NAV.filter((n) => !["/comprobantes", "/semana", "/garantias", "/plan", "/metas", "/patrimonio", "/comprar", "/cuenta", "/fijos", "/ajustes", "/etiquetas", "/categorias"].includes(n.href));
+const NAV_CELU = NAV.filter((n) => !["/comprobantes", "/semana", "/garantias", "/plan", "/metas", "/patrimonio", "/comprar", "/cuenta", "/fijos", "/ajustes", "/etiquetas", "/categorias", "/topes"].includes(n.href));
 
 function activa(pathname: string, href: string) {
   if (href === "/") return pathname === "/";

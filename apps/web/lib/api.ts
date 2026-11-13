@@ -508,6 +508,21 @@ export interface Racha {
   dias: { fecha: string; estado: "cargado" | "sin_gastos" | "vacio" }[];
 }
 
+export interface Tope {
+  categoria_id: string;
+  categoria: string;
+  icono: string;
+  color: string;
+  tope: string | null;
+  gastado: string;
+  porcentaje: number;
+  queda: string;
+  proyeccion: string;
+  promedio: string;
+  sugerido: string | null;
+  estado: "ok" | "cerca" | "pasado" | "sin_tope";
+}
+
 export function apiBase(): string {
   // Por defecto, la API se alcanza a través de la propia web (ver next.config.ts).
   return process.env.NEXT_PUBLIC_API_URL || "/api";

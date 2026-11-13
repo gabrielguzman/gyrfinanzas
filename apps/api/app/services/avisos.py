@@ -190,7 +190,7 @@ def calcular(db: Session, ahora: datetime) -> list[Aviso]:
 
     if prefs["notif_avisos"]:
         for h in detectores.hallazgos(db, hoy):
-            if h.tipo in ("garantia", "fijo_atrasado", "inversion", "duplicado", "no_mensual") and h.tono == "aviso":
+            if h.tipo in ("garantia", "fijo_atrasado", "inversion", "duplicado", "no_mensual", "tope") and h.tono == "aviso":
                 out.append(Aviso(f"h:{h.clave}", h.titulo, h.detalle, "/"))
     return out
 

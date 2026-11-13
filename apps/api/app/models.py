@@ -542,3 +542,14 @@ class DiaSinGastos(Base):
     __tablename__ = "dia_sin_gastos"
 
     fecha: Mapped[date] = mapped_column(Date, primary_key=True)
+
+
+class TopeCategoria(Base):
+    """Cuánto querés gastar como mucho por mes en una categoría (avisa al 80% y al pasarte)."""
+    __tablename__ = "tope_categoria"
+
+    categoria_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("categoria.id", ondelete="CASCADE"), primary_key=True)
+    monto: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    creado: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    categoria: Mapped[Categoria] = relationship()

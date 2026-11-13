@@ -287,6 +287,28 @@ def _no_mensuales(db: Session, hoy: date) -> list[Hallazgo]:
     return out
 
 
+def _topes(db: Session, hoy: date) -> list[Hallazgo]:
+    from app.services.topes import estados
+    out = []
+    for e in estados(db, hoy, solo_con_tope=True):
+        c = e.categoria
+        accion = {"tipo": "categoria", "valor": str(c.id)}
+        if e.estado == "pasado":
+            out.append(Hallazgo(
+                clave=f"tope_pasado:{c.id}:{hoy:%Y-%m}", tipo="tope", tono="aviso", orden=6,
+                titulo=f"Te pasaste del tope de {c.nombre}",
+                detalle=f"Llevás {_pesos(e.gastado)} de {_pesos(e.tope)} este mes ({e.porcentaje}%).",
+                monto=e.gastado, accion=accion))
+        elif e.estado == "cerca":
+            out.append(Hallazgo(
+                clave=f"tope_80:{c.id}:{hoy:%Y-%m}", tipo="tope", tono="aviso", orden=11,
+                titulo=f"{c.nombre}: llevás el {e.porcentaje}% del tope",
+                detalle=f"Te quedan {_pesos(e.queda)} hasta fin de mes"
+                        + (f"; a este ritmo cerrarías en {_pesos(e.proyeccion)}." if e.proyeccion > e.tope else "."),
+                monto=e.gastado, accion=accion))
+    return out
+
+
 def _fijos_sugeridos(db: Session, hoy: date) -> list[Hallazgo]:
     from app.services.fijos import sugeridos
     sug = sugeridos(db, hoy)
@@ -399,7 +421,7 @@ def hallazgos(db: Session, hoy: date | None = None, incluir_descartados: bool = 
     hoy = hoy or date.today()
     ult30 = gastos(db, hoy - timedelta(days=30), hoy)
     rec = recurrentes(db, hoy)
-    todos = (_duplicados(ult30) + _fijos_atrasados(db, hoy) + _no_mensuales(db, hoy) + _fijos_sugeridos(db, hoy) + _garantias(db, hoy) + _aumentos(rec) + _plata_tirada(ult30, hoy)
+    todos = (_duplicados(ult30) + _fijos_atrasados(db, hoy) + _topes(db, hoy) + _no_mensuales(db, hoy) + _fijos_sugeridos(db, hoy) + _garantias(db, hoy) + _aumentos(rec) + _plata_tirada(ult30, hoy)
              + _hormiga(ult30, hoy) + _desvios(db, hoy) + _sin_garantia(gastos(db, hoy - timedelta(days=30), hoy, incluir_cuotas=True)) + _fijos(rec)
              + _metas(db, hoy) + _inversiones(db, hoy))
     if not incluir_descartados:
