@@ -12,6 +12,7 @@ from app.accounts_models import AuthBase, Usuario, TokenAcceso
 from app.config import settings
 from app.db import Base
 from app.main import app
+from app.seed import GASTOS, INGRESOS
 
 URL = os.environ.get('GYR_AUTH_TEST_URL', '')
 pytestmark = pytest.mark.skipif(not URL, reason='Requiere PostgreSQL de prueba')
@@ -57,7 +58,7 @@ def test_aislamiento_completo(multi):
     assert c.post('/auth/aceptar',json={'token':token,'nombre':'Otro','password':PASS}).status_code==400
     signin(c)
     assert c.get('/cuentas').json()==[]
-    assert len(c.get('/categorias').json())==19
+    assert len(c.get('/categorias').json())==len(GASTOS)+len(INGRESOS)
     assert c.get('/cuentas/'+owner['id']).status_code==404
     assert c.get('/archivos/'+archivo['id']+'/contenido').status_code==404
     assert c.get('/archivos').json()==[]
@@ -177,7 +178,7 @@ def test_registro_publico_verifica_email_y_aisla_datos(multi,monkeypatch):
     r=c.post('/auth/aceptar',json={'token':token,'nombre':'Persona','password':PASS});assert r.status_code==200,r.text
     assert c.post('/auth/aceptar',json={'token':token,'nombre':'Otra','password':PASS}).status_code==400
     signin(c,'persona@example.com')
-    assert c.get('/cuentas').json()==[] and len(c.get('/categorias').json())==19
+    assert c.get('/cuentas').json()==[] and len(c.get('/categorias').json())==len(GASTOS)+len(INGRESOS)
     assert c.get('/cuentas/'+owner['id']).status_code==404
     assert c.get('/auth/estado').json()['usuario']['administrador'] is False
     assert c.post('/auth/invitar',json={'email':'otro@example.com'}).status_code==403
